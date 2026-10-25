@@ -68,3 +68,4 @@ export interface DoctorProfile {
   chambers?: Chamber[];
   leaves?: DoctorLeave[];
 }
+

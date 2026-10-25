@@ -5,14 +5,27 @@ import { Award, Image as ImageIcon, X, ZoomIn } from 'lucide-react';
 import { DoctorGalleryItem } from '@/types/doctor';
 
 interface DoctorGalleryProps {
-  gallery: DoctorGalleryItem[] | null | undefined;
+  gallery: any;
   doctorName: string;
 }
 
 export default function DoctorGallery({ gallery, doctorName }: DoctorGalleryProps) {
   const [activeItem, setActiveItem] = useState<DoctorGalleryItem | null>(null);
 
-  if (!gallery || gallery.length === 0) {
+  const items: DoctorGalleryItem[] = Array.isArray(gallery)
+    ? gallery
+    : typeof gallery === 'string'
+    ? (() => {
+        try {
+          const parsed = JSON.parse(gallery);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })()
+    : [];
+
+  if (!items || items.length === 0) {
     return null;
   }
 
@@ -24,13 +37,13 @@ export default function DoctorGallery({ gallery, doctorName }: DoctorGalleryProp
           <h3 className="font-bold text-slate-900 text-base">Achievements &amp; Photo Gallery</h3>
         </div>
         <span className="text-xs text-slate-500 font-medium">
-          {gallery.length} verified item{gallery.length > 1 ? 's' : ''}
+          {items.length} verified item{items.length > 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Grid of gallery thumbnails */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {gallery.map((item, idx) => (
+        {items.map((item, idx) => (
           <div
             key={idx}
             onClick={() => setActiveItem(item)}

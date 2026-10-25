@@ -1,16 +1,17 @@
 import axios from 'axios';
 
-const getApiBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+export const getValidApiBaseUrl = (): string => {
+  const envUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
+    return envUrl;
   }
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return 'https://backend-chi-five-90.vercel.app/api';
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:5000/api';
   }
-  return 'http://localhost:5000/api';
+  return 'https://backend-chi-five-90.vercel.app/api';
 };
 
-export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getValidApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

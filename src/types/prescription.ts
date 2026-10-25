@@ -38,3 +38,4 @@ export interface LabTestInvestigation {
   instructions?: string;
   status?: string;
 }
+

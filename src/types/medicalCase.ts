@@ -64,3 +64,4 @@ export interface PatientHistoryResponse {
     clinicalAlerts: string[];
   };
 }
+

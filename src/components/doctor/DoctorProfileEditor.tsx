@@ -542,3 +542,4 @@ export default function DoctorProfileEditor({ onProfileUpdated }: DoctorProfileE
     </div>
   );
 }
+

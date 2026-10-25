@@ -114,3 +114,4 @@ export const useToast = (): ToastContextType['toast'] => {
   }
   return context.toast;
 };
+

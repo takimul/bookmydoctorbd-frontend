@@ -26,3 +26,4 @@ export interface LabTestCatalogItem {
   turnaroundTime: string;
   sampleCollectionNote?: string;
 }
+

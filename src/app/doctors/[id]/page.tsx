@@ -2,13 +2,12 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import DoctorProfileView from '@/components/doctor/DoctorProfileView';
 import { DoctorProfile } from '@/types/doctor';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://backend-chi-five-90.vercel.app/api';
+import { getValidApiBaseUrl } from '@/lib/api';
 
 async function getDoctor(id: string): Promise<DoctorProfile | null> {
+  const baseUrl = getValidApiBaseUrl();
   try {
-    const res = await fetch(`${API_BASE_URL}/doctors/${id}`, {
+    const res = await fetch(`${baseUrl}/doctors/${encodeURIComponent(id)}`, {
       next: { revalidate: 60 }, // ISR cache for 60 seconds
     });
     if (!res.ok) return null;
@@ -30,8 +29,8 @@ export async function generateMetadata({
 
   if (!doctor) {
     return {
-      title: 'Doctor Not Found | BookMyDoctorBD',
-      description: 'The requested physician profile could not be found.',
+      title: 'Doctor Profile | BookMyDoctorBD',
+      description: 'Find verified specialist doctors and chamber visiting hours across Bangladesh.',
     };
   }
 
@@ -45,7 +44,7 @@ export async function generateMetadata({
     description: `Book consultation with ${doctorName}, ${degrees}, specializing in ${specialties}. ${doctor.experienceYears} years experience. Live chamber slot booking available.`,
     openGraph: {
       title: `${doctorName} - ${specialties} | BookMyDoctorBD`,
-      description: `${degrees} &bull; ${doctor.experienceYears} Years Experience &bull; BMDC Reg. ${doctor.bmdcRegNumber}`,
+      description: `${degrees} • ${doctor.experienceYears} Years Experience • BMDC Reg. ${doctor.bmdcRegNumber}`,
       images: doctor.profilePhotoUrl ? [doctor.profilePhotoUrl] : [],
       type: 'profile',
     },

@@ -29,8 +29,21 @@ interface DoctorProfileViewProps {
 
 export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
   const toast = useToast();
+
+  const doctorName = doctor.user?.name || 'Verified Physician';
+  const bmdc = doctor.bmdcRegNumber || 'Verified BMDC';
+  const specialties = Array.isArray(doctor.specialties) ? doctor.specialties : [];
+  const degrees = Array.isArray(doctor.degrees) ? doctor.degrees : [];
+  const languages = Array.isArray(doctor.languages) ? doctor.languages : [];
+  const chambers = Array.isArray(doctor.chambers) ? doctor.chambers : [];
+  const rating = typeof doctor.rating === 'number' ? doctor.rating.toFixed(1) : '5.0';
+  const totalReviews = doctor.totalReviews || 0;
+  const experienceYears = doctor.experienceYears || 0;
+  const baseFee = doctor.baseConsultationFee || 500;
+  const followUpFee = doctor.followUpFee || 300;
+
   const [selectedChamber, setSelectedChamber] = useState<Chamber | null>(
-    doctor.chambers && doctor.chambers.length > 0 ? doctor.chambers[0] : null
+    chambers.length > 0 ? chambers[0] : null
   );
   const [selectedSlot, setSelectedSlot] = useState<AppointmentSlotAvailability | null>(null);
   const [appointmentDate, setAppointmentDate] = useState<string>(
@@ -113,7 +126,7 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
             {doctor.profilePhotoUrl ? (
               <img
                 src={doctor.profilePhotoUrl}
-                alt={doctor.user.name}
+                alt={doctorName}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -133,15 +146,15 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {doctor.user.name}
+                  {doctorName}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>BMDC: {doctor.bmdcRegNumber}</span>
+                  <span>BMDC: {bmdc}</span>
                 </span>
               </div>
               <p className="text-sm font-semibold text-emerald-800 mt-1">
-                {doctor.degrees && doctor.degrees.length > 0 ? doctor.degrees.join(', ') : 'MBBS'}
+                {degrees.length > 0 ? degrees.join(', ') : 'MBBS'}
               </p>
             </div>
 
@@ -156,7 +169,7 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
 
           {/* Specialties Pills */}
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {doctor.specialties.map((spec) => (
+            {specialties.map((spec) => (
               <span
                 key={spec}
                 className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700"
@@ -170,23 +183,23 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Experience</span>
-              <span className="font-extrabold text-slate-800">{doctor.experienceYears} Years</span>
+              <span className="font-extrabold text-slate-800">{experienceYears} Years</span>
             </div>
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Patient Rating</span>
               <span className="font-extrabold text-slate-800 flex items-center gap-1">
                 <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                <span>{doctor.rating.toFixed(1)}</span>
-                <span className="text-slate-400 font-normal">({doctor.totalReviews})</span>
+                <span>{rating}</span>
+                <span className="text-slate-400 font-normal">({totalReviews})</span>
               </span>
             </div>
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Consultation Fee</span>
-              <span className="font-extrabold text-emerald-700">৳ {doctor.baseConsultationFee}</span>
+              <span className="font-extrabold text-emerald-700">৳ {baseFee}</span>
             </div>
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span className="text-slate-400 block text-[10px] font-bold uppercase">Follow-up Fee</span>
-              <span className="font-extrabold text-slate-800">৳ {doctor.followUpFee}</span>
+              <span className="font-extrabold text-slate-800">৳ {followUpFee}</span>
             </div>
           </div>
         </div>
@@ -199,17 +212,17 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
           <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
             {doctor.aboutBio}
           </p>
-          {doctor.languages && doctor.languages.length > 0 && (
+          {languages.length > 0 && (
             <div className="pt-2 text-xs text-slate-500">
               <span className="font-semibold text-slate-700">Consultation Languages: </span>
-              {doctor.languages.join(', ')}
+              {languages.join(', ')}
             </div>
           )}
         </div>
       )}
 
       {/* Doctor Gallery & Certifications Component */}
-      <DoctorGallery gallery={doctor.gallery} doctorName={doctor.user.name} />
+      <DoctorGallery gallery={doctor.gallery} doctorName={doctorName} />
 
       {/* Chamber Selection & Slot-Wise Booking System */}
       <div className="space-y-4" id="book-slot">
@@ -223,10 +236,10 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
         </div>
 
         {/* Chamber Selector Tabs */}
-        {doctor.chambers && doctor.chambers.length > 0 ? (
+        {chambers.length > 0 ? (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              {doctor.chambers.map((c) => (
+              {chambers.map((c) => (
                 <button
                   type="button"
                   key={c.id}
@@ -274,7 +287,7 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
               <div>
                 <h3 className="font-extrabold text-base">Confirm Chamber Appointment</h3>
                 <p className="text-xs text-emerald-100">
-                  {doctor.user.name} &bull; {selectedChamber.name}
+                  {doctorName} &bull; {selectedChamber.name}
                 </p>
               </div>
               <button

@@ -10,3 +10,4 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: 'https://frontend-alpha-ebon-93.vercel.app/sitemap.xml',
   };
 }
+

@@ -734,3 +734,4 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
     </div>
   );
 }
+

@@ -11,3 +11,4 @@ export interface MedicineCatalogItem {
   indications?: string[];
   unitPrice?: number | null;
 }
+
