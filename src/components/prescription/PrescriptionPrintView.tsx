@@ -1,7 +1,17 @@
 'use client';
 
-import React from 'react';
-import { Printer, X, Stethoscope, CheckCircle2, ShieldCheck, HeartPulse } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Printer,
+  X,
+  Stethoscope,
+  CheckCircle2,
+  ShieldCheck,
+  HeartPulse,
+  FileDown,
+  Loader2,
+} from 'lucide-react';
+import { useToast } from '@/context/ToastContext';
 import { DoctorProfile, Chamber } from '@/types/doctor';
 import { Prescription } from '@/types/prescription';
 
@@ -57,9 +67,8 @@ export default function PrescriptionPrintView({
   rxData,
   onClose,
 }: PrescriptionPrintViewProps) {
-  const handlePrint = () => {
-    window.print();
-  };
+  const toast = useToast();
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const currentDate = rxData.date
     ? new Date(rxData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -70,6 +79,147 @@ export default function PrescriptionPrintView({
   const doctorSpecialties = doctor?.specialties?.length ? doctor.specialties.join(' • ') : 'General Medicine & Specialist';
   const bmdcReg = doctor?.bmdcRegNumber || 'Verified BMDC';
 
+  // 1. Direct PDF Download via html2pdf.js
+  const handleDownloadPdf = async () => {
+    const element = document.getElementById('bmd-prescription-sheet');
+    if (!element) {
+      toast.error('Prescription sheet element not found.');
+      return;
+    }
+
+    setDownloadingPdf(true);
+    try {
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+
+      const filename = `Prescription_${(patient.name || 'Patient').replace(/\s+/g, '_')}_${rxData.prescriptionNumber || rxData.caseNumber || 'BMD-RX'}.pdf`;
+
+      const opt = {
+        margin: [4, 6, 4, 6],
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      };
+
+      await html2pdf().set(opt).from(element).save();
+      toast.success('Prescription PDF downloaded successfully!');
+    } catch (err: any) {
+      console.error('Direct PDF generation error:', err);
+      toast.error('Could not generate direct PDF. Opening print dialog...');
+      handlePrint();
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  // 2. Isolated Iframe Print (guarantees print preview displays ONLY the prescription sheet)
+  const handlePrint = () => {
+    const printContent = document.getElementById('bmd-prescription-sheet');
+    if (!printContent) {
+      window.print();
+      return;
+    }
+
+    try {
+      // Remove any prior print frame
+      const existingIframe = document.getElementById('bmd-isolated-print-frame');
+      if (existingIframe) {
+        existingIframe.remove();
+      }
+
+      // Create hidden iframe
+      const iframe = document.createElement('iframe');
+      iframe.id = 'bmd-isolated-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        window.print();
+        return;
+      }
+
+      // Extract all current stylesheets and inline styles from the parent application
+      let styles = '';
+      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+        styles += node.outerHTML;
+      });
+
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <title>Prescription_${(patient.name || 'Patient').replace(/\\s+/g, '_')}_${rxData.prescriptionNumber || rxData.caseNumber || 'BMD-RX'}</title>
+            ${styles}
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 4mm 6mm;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                width: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              #bmd-prescription-sheet {
+                width: 100% !important;
+                max-width: 198mm !important;
+                min-height: 284mm !important;
+                max-height: 284mm !important;
+                margin: 0 auto !important;
+                padding: 4mm 6mm !important;
+                border: none !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                background: #ffffff !important;
+              }
+            </style>
+          </head>
+          <body style="margin: 0; padding: 0; background: #ffffff;">
+            ${printContent.outerHTML}
+          </body>
+        </html>
+      `);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.error('Iframe print failed, falling back:', e);
+          window.print();
+        } finally {
+          setTimeout(() => {
+            iframe.remove();
+          }, 3500);
+        }
+      }, 400);
+    } catch (err) {
+      console.error('Print handler fallback triggered:', err);
+      window.print();
+    }
+  };
+
   return (
     <>
       {/* Strict Single-Page A4 Print Stylesheet */}
@@ -78,7 +228,7 @@ export default function PrescriptionPrintView({
           __html: `
             @page {
               size: A4 portrait;
-              margin: 6mm 8mm;
+              margin: 4mm 6mm;
             }
             @media print {
               html, body {
@@ -90,14 +240,31 @@ export default function PrescriptionPrintView({
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
-              .no-print, header, nav, footer, .modal-backdrop {
+              /* Hide all other application components and dialogs */
+              body > *:not(#bmd-prescription-modal-root) {
+                display: none !important;
+                visibility: hidden !important;
+              }
+              .no-print, header, nav, footer {
                 display: none !important;
               }
-              .prescription-sheet {
+              #bmd-prescription-modal-root {
+                display: block !important;
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 210mm !important;
+                height: 297mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                z-index: 9999999 !important;
+              }
+              #bmd-prescription-sheet {
                 width: 100% !important;
-                max-width: 194mm !important;
-                height: 284mm !important;
-                max-height: 284mm !important;
+                max-width: 198mm !important;
+                height: 287mm !important;
+                max-height: 287mm !important;
                 margin: 0 auto !important;
                 padding: 4mm 6mm !important;
                 border: none !important;
@@ -122,7 +289,10 @@ export default function PrescriptionPrintView({
       />
 
       {/* Screen Backdrop Overlay */}
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static print:h-auto modal-backdrop">
+      <div
+        id="bmd-prescription-modal-root"
+        className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static print:h-auto"
+      >
         <div className="relative bg-white w-full max-w-4xl shadow-2xl rounded-2xl print:shadow-none print:rounded-none flex flex-col my-auto border border-slate-200 print:border-none print:w-full print:max-w-none">
           
           {/* Action Bar (Hidden in Print) */}
@@ -135,13 +305,36 @@ export default function PrescriptionPrintView({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Direct PDF Download Button */}
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
+                title="Download formatted single-page A4 PDF file"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-4 h-4" />
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </button>
+
+              {/* Print / Save as PDF Button */}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
+                title="Open browser print dialog to Print or Save as PDF"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Prescription</span>
+                <span>Print / Save PDF</span>
               </button>
 
               {onClose && (
@@ -158,8 +351,10 @@ export default function PrescriptionPrintView({
           </div>
 
           {/* Single-Page Printable A4 Container */}
-          <div className="prescription-sheet p-6 sm:p-8 print:p-0 text-slate-900 bg-white font-sans flex flex-col justify-between text-xs leading-normal">
-            
+          <div
+            id="bmd-prescription-sheet"
+            className="prescription-sheet p-6 sm:p-8 print:p-0 text-slate-900 bg-white font-sans flex flex-col justify-between text-xs leading-normal"
+          >
             <div className="space-y-3">
               {/* Header: Platform Branding & Prescription Number */}
               <div className="flex items-center justify-between border-b-2 border-emerald-700 pb-2.5">
@@ -496,4 +691,3 @@ export default function PrescriptionPrintView({
     </>
   );
 }
-
