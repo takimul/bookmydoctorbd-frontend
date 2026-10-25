@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Plus,
   RefreshCw,
+  Printer,
 } from 'lucide-react';
+import PrescriptionPrintView from '@/components/PrescriptionPrintView';
 
 export default function PatientPortalPage() {
   const { user } = useAuth();
@@ -27,6 +29,7 @@ export default function PatientPortalPage() {
 
   // Digital Follow-up / Report Upload Modal
   const [selectedCaseForFollowUp, setSelectedCaseForFollowUp] = useState<any | null>(null);
+  const [selectedRxForPrint, setSelectedRxForPrint] = useState<any | null>(null);
   const [uploadTestName, setUploadTestName] = useState('Lipid Profile Report');
   const [uploadFileUrl, setUploadFileUrl] = useState('https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80');
   const [uploadHospital, setUploadHospital] = useState('Popular Diagnostic Centre');
@@ -297,9 +300,35 @@ export default function PatientPortalPage() {
                   {/* Prescriptions */}
                   {medCase.prescriptions && medCase.prescriptions.length > 0 && (
                     <div className="space-y-3">
-                      <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400">
-                        Prescription Medications
-                      </h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400">
+                          Prescription Medications
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedRxForPrint({
+                              doctor: medCase.doctor,
+                              chamber: medCase.appointment?.chamber,
+                              patient: { name: user?.name || 'Patient', phone: user?.phone || '' },
+                              rxData: {
+                                caseNumber: medCase.caseNumber,
+                                diagnosis: medCase.diagnosis,
+                                vitals: medCase.prescriptions[0].vitals,
+                                advice: medCase.prescriptions[0].advice || medCase.clinicalNotes,
+                                dietaryAdvice: medCase.prescriptions[0].dietaryAdvice,
+                                nextVisitDate: medCase.prescriptions[0].nextVisitDate,
+                                items: medCase.prescriptions[0].items || [],
+                                investigations: medCase.investigationOrders || [],
+                              },
+                            })
+                          }
+                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg flex items-center gap-1.5 transition"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Print Official Prescription</span>
+                        </button>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {medCase.prescriptions[0].items?.map((item: any) => (
                           <div
@@ -805,6 +834,15 @@ export default function PatientPortalPage() {
             </button>
           </form>
         </div>
+      )}
+      {selectedRxForPrint && (
+        <PrescriptionPrintView
+          doctor={selectedRxForPrint.doctor}
+          chamber={selectedRxForPrint.chamber}
+          patient={selectedRxForPrint.patient}
+          rxData={selectedRxForPrint.rxData}
+          onClose={() => setSelectedRxForPrint(null)}
+        />
       )}
     </div>
   );
