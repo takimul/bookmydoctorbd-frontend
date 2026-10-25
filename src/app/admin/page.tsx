@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import {
   ShieldAlert,
   UserPlus,
@@ -23,6 +24,7 @@ import {
 
 export default function SuperAdminPage() {
   const { user } = useAuth();
+  const toast = useToast();
 
   const [analytics, setAnalytics] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -105,11 +107,11 @@ export default function SuperAdminPage() {
         ...(isSponsored !== undefined && { isSponsored, sponsoredDays: 30 }),
       });
       if (res.data.success) {
-        alert(res.data.message);
+        toast.success(res.data.message || 'Status updated.');
         fetchAdminData();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update status.');
+      toast.error(err.response?.data?.message || 'Failed to update status.');
     }
   };
 
@@ -131,7 +133,7 @@ export default function SuperAdminPage() {
         fetchAdminData();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to create doctor account.');
+      toast.error(err.response?.data?.message || 'Failed to create doctor account.');
     } finally {
       setCreateLoading(false);
     }
@@ -148,12 +150,12 @@ export default function SuperAdminPage() {
         isTrial: isTrialSub,
       });
       if (res.data.success) {
-        alert(res.data.message);
+        toast.success(res.data.message || 'Subscription assigned.');
         setSelectedDocForSub(null);
         fetchAdminData();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to assign subscription.');
+      toast.error(err.response?.data?.message || 'Failed to assign subscription.');
     } finally {
       setSubLoading(false);
     }

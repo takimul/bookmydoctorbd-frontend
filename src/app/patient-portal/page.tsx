@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import {
   Calendar,
   FileText,
@@ -22,6 +23,7 @@ import PrescriptionPrintView from '@/components/PrescriptionPrintView';
 
 export default function PatientPortalPage() {
   const { user } = useAuth();
+  const toast = useToast();
 
   const [dashboardData, setDashboardData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,7 @@ export default function PatientPortalPage() {
         setDigitalStep('pay');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to initiate digital follow-up.');
+      toast.error(err.response?.data?.message || 'Failed to initiate digital follow-up.');
     }
   };
 
@@ -117,10 +119,11 @@ export default function PatientPortalPage() {
       });
       if (res.data.success) {
         setDigitalStep('complete');
+        toast.success('Digital follow-up request and payment processed successfully!');
         fetchDashboard();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Payment simulation failed.');
+      toast.error(err.response?.data?.message || 'Payment simulation failed.');
     }
   };
 
@@ -134,10 +137,11 @@ export default function PatientPortalPage() {
       });
       if (res.data.success) {
         setShowAddFamilyModal(false);
+        toast.success('Family member added to medical profile.');
         fetchDashboard();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add family member.');
+      toast.error(err.response?.data?.message || 'Failed to add family member.');
     }
   };
 
@@ -148,10 +152,11 @@ export default function PatientPortalPage() {
       const res = await api.post('/patient/pets', petForm);
       if (res.data.success) {
         setShowAddPetModal(false);
+        toast.success('Pet profile added successfully.');
         fetchDashboard();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add pet profile.');
+      toast.error(err.response?.data?.message || 'Failed to add pet profile.');
     }
   };
 

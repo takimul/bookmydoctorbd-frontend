@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import {
   Stethoscope,
   Calendar,
@@ -39,6 +40,9 @@ import ChamberSlotManager from '@/components/ChamberSlotManager';
 
 export default function DoctorPortalPage() {
   const { user } = useAuth();
+  const toast = useToast();
+  const [labTestSuggestions, setLabTestSuggestions] = useState<any[]>([]);
+  const [activeTestIdx, setActiveTestIdx] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<
     'appointments' | 'cases' | 'chambers' | 'profile' | 'reports'
@@ -139,7 +143,7 @@ export default function DoctorPortalPage() {
         fetchDoctorPortalData();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update status.');
+      toast.error(err.response?.data?.message || 'Failed to update status.');
     }
   };
 
@@ -167,7 +171,7 @@ export default function DoctorPortalPage() {
   // 1-Click AI Quick Diagnose & Auto-Prescribe
   const handleQuickDiagnose = async () => {
     if (!chiefComplaints && !activeConsultationAppt?.problemDescription) {
-      alert('Please enter patient chief complaints or symptoms first.');
+      toast.warning('Please enter patient chief complaints or symptoms first.');
       return;
     }
 
@@ -196,9 +200,27 @@ export default function DoctorPortalPage() {
         }
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to generate AI diagnosis.');
+      toast.error(err.response?.data?.message || 'Failed to generate AI diagnosis.');
     } finally {
       setQuickDiagnoseLoading(false);
+    }
+  };
+
+  
+  // Lab test autocomplete search
+  const handleLabTestSearch = async (query: string, index: number) => {
+    setActiveTestIdx(index);
+    if (!query || query.length < 1) {
+      setLabTestSuggestions([]);
+      return;
+    }
+    try {
+      const res = await api.get(`/ai/lab-tests?q=${encodeURIComponent(query)}`);
+      if (res.data.success && res.data.tests) {
+        setLabTestSuggestions(res.data.tests.slice(0, 8));
+      }
+    } catch (e) {
+      // silent
     }
   };
 
@@ -266,13 +288,13 @@ export default function DoctorPortalPage() {
       setDiagnosis(pastDiagnosis);
     }
     setShowHistoryModal(false);
-    alert('Patient history medications imported into Consultation Studio!');
+    toast.success('Patient history medications imported into Consultation Studio!');
   };
 
   // Save Prescription
   const handleSavePrescription = async () => {
     if (!activeConsultationAppt?.medicalCase?.id) {
-      alert('Medical Case not found. Please complete the appointment first.');
+      toast.warning('Medical Case not found. Please complete the appointment first.');
       return;
     }
 
@@ -302,11 +324,11 @@ export default function DoctorPortalPage() {
         });
       }
 
-      alert('Official Prescription & Clinical Notes successfully issued to Medical Case!');
+      toast.success('Official Prescription & Clinical Notes successfully issued to Medical Case!');
       setShowPrintModal(true);
       fetchDoctorPortalData();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save prescription.');
+      toast.error(err.response?.data?.message || 'Failed to save prescription.');
     }
   };
 
@@ -1063,12 +1085,40 @@ export default function DoctorPortalPage() {
                       placeholder="e.g. Complete Blood Count (CBC) with ESR or Chest X-Ray"
                       value={test.testName}
                       onChange={(e) => {
+                        const val = e.target.value;
                         const updated = [...investigations];
-                        updated[idx].testName = e.target.value;
+                        updated[idx].testName = val;
                         setInvestigations(updated);
+                        handleLabTestSearch(val, idx);
                       }}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium"
+                      onFocus={() => handleLabTestSearch(test.testName || 'a', idx)}
+                      className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium relative"
                     />
+                    {activeTestIdx === idx && labTestSuggestions.length > 0 && (
+                      <div className="absolute top-12 left-0 z-30 w-full sm:w-96 bg-white border border-slate-200 rounded-xl shadow-xl p-1 max-h-48 overflow-y-auto">
+                        {labTestSuggestions.map((lt) => (
+                          <div
+                            key={lt.id}
+                            onClick={() => {
+                              const updated = [...investigations];
+                              updated[idx].testName = lt.name;
+                              if (lt.sampleCollectionNote) {
+                                updated[idx].instructions = lt.sampleCollectionNote;
+                              } else if (lt.fastingRequired) {
+                                updated[idx].instructions = 'Overnight 10-12 hours fasting required';
+                              }
+                              setInvestigations(updated);
+                              setLabTestSuggestions([]);
+                              setActiveTestIdx(null);
+                            }}
+                            className="p-2 hover:bg-emerald-50 rounded-lg cursor-pointer text-xs"
+                          >
+                            <span className="font-bold text-slate-900 block">{lt.name}</span>
+                            <span className="text-[10px] text-emerald-700">{lt.category} &bull; {lt.department}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <input
                       type="text"
                       placeholder="Special instructions (e.g. Fasting 12 hours)"
@@ -1270,12 +1320,12 @@ export default function DoctorPortalPage() {
                       followUpId: selectedCaseForReview.digitalFollowUps[0].id,
                       doctorAdvice: followUpAdviceText,
                     });
-                    alert('Clinical advice sent to patient successfully.');
+                    toast.success('Clinical advice sent to patient successfully.');
                     setSelectedCaseForReview(null);
                     setFollowUpAdviceText('');
                     fetchDoctorPortalData();
                   } catch (err: any) {
-                    alert(err.response?.data?.message || 'Failed to send advice.');
+                    toast.error(err.response?.data?.message || 'Failed to send advice.');
                   }
                 }}
                 className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl"

@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login(res.data.token, res.data.user);
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Quick login failed');
+      console.error('Quick login error:', err.response?.data?.message || err.message);
     } finally {
       setIsLoading(false);
     }

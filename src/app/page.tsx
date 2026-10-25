@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import SlotBookingCard from '@/components/appointments/SlotBookingCard';
 import {
   Search,
   MapPin,
@@ -24,6 +27,8 @@ import {
 
 export default function HomePage() {
   const { user } = useAuth();
+  const toast = useToast();
+  const [selectedSlotTitle, setSelectedSlotTitle] = useState('');
 
   const [doctors, setDoctors] = useState<any[]>([]);
   const [totalDoctors, setTotalDoctors] = useState(0);
@@ -116,6 +121,7 @@ export default function HomePage() {
       setPatientName(user.name);
       setPatientPhone(user.phone);
       setOtpVerified(true);
+        toast.success('Mobile phone verified successfully!');
     }
   }, [user]);
 
@@ -157,7 +163,7 @@ export default function HomePage() {
   // Request Guest OTP
   const handleRequestOtp = async () => {
     if (!patientPhone) {
-      alert('Please enter your mobile phone number first.');
+      toast.warning('Please enter your mobile phone number first.');
       return;
     }
     try {
@@ -168,10 +174,11 @@ export default function HomePage() {
       if (res.data.success) {
         setOtpSent(true);
         setDevOtp(res.data.devOtp || '123456');
-        setOtpCode(res.data.devOtp || '123456'); // Pre-fill dev OTP for one-click ease
+        setOtpCode(res.data.devOtp || '123456');
+        toast.info('OTP code sent to your mobile phone.');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to send OTP.');
+      toast.error(err.response?.data?.message || 'Failed to send OTP.');
     }
   };
 
@@ -187,7 +194,7 @@ export default function HomePage() {
         setOtpVerified(true);
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'OTP verification failed.');
+      toast.error(err.response?.data?.message || 'OTP verification failed.');
     }
   };
 
@@ -195,11 +202,11 @@ export default function HomePage() {
   const handleConfirmBooking = async () => {
     if (!selectedDoctor || !selectedChamber) return;
     if (!patientName || !patientPhone) {
-      alert('Please provide patient name and phone number.');
+      toast.warning('Please provide patient name and phone number.');
       return;
     }
     if (!user && !otpVerified) {
-      alert('Please verify your mobile number via OTP first.');
+      toast.warning('Please verify your mobile number via OTP first.');
       return;
     }
 
@@ -218,9 +225,10 @@ export default function HomePage() {
 
       if (res.data.success) {
         setBookingSuccess(res.data.appointment);
+        toast.success(`Appointment confirmed! Serial #${res.data.appointment?.serialNumber || 1}`);
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Booking failed.');
+      toast.error(err.response?.data?.message || 'Booking failed.');
     } finally {
       setBookingLoading(false);
     }
@@ -630,13 +638,22 @@ export default function HomePage() {
                           </p>
                         </div>
 
-                        <button
-                          onClick={() => openBookingModal(doctor)}
-                          className="mt-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-brand-500/20 transition flex items-center gap-1.5"
-                        >
-                          <Calendar className="w-3.5 h-3.5" />
-                          <span>Book Appointment</span>
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <button
+                            onClick={() => openBookingModal(doctor)}
+                            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-brand-500/20 transition flex items-center gap-1.5"
+                          >
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>Book Appointment</span>
+                          </button>
+                          <Link
+                            href={`/doctors/${doctor.id}`}
+                            className="px-4 py-2.5 border border-slate-300 hover:border-brand-500 hover:bg-brand-50 text-slate-700 hover:text-brand-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                            <span>View Profile &amp; Gallery</span>
+                          </Link>
+                        </div>
                       </div>
                     </div>
 
