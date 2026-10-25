@@ -247,20 +247,21 @@ export default function HomePage() {
   // Confirm Booking
   const handleConfirmBooking = async () => {
     if (!selectedDoctor || !selectedChamber) return;
-    if (!selectedSlot) {
-      toast.warning('Please select an available appointment time slot.');
-      return;
-    }
-    if (selectedSlot.isFull || isDoctorOnLeave) {
-      toast.error('The selected slot is unavailable or fully booked. Please select another slot.');
-      return;
-    }
     if (!patientName || !patientPhone) {
       toast.warning('Please provide patient name and phone number.');
       return;
     }
     if (!user && !otpVerified) {
       toast.warning('Please verify your mobile number via OTP first.');
+      return;
+    }
+
+    if (!selectedSlot) {
+      toast.warning('Please select an available appointment time slot.');
+      return;
+    }
+    if (selectedSlot.isFull || isDoctorOnLeave) {
+      toast.error('The selected slot is unavailable or fully booked. Please select another slot.');
       return;
     }
 
