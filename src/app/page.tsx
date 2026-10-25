@@ -23,6 +23,9 @@ import {
   User,
   CreditCard,
   Building,
+  AlertCircle,
+  Lock,
+  Users,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -69,6 +72,11 @@ export default function HomePage() {
   const [otpVerified, setOtpVerified] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState<any | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [isDoctorOnLeave, setIsDoctorOnLeave] = useState(false);
+  const [doctorLeaveReason, setDoctorLeaveReason] = useState<string | null>(null);
 
   // Fetch doctors based on current filters
   const fetchDoctors = async () => {
@@ -125,6 +133,40 @@ export default function HomePage() {
     }
   }, [user]);
 
+  // Fetch Chamber Live Slot Availabilities & Doctor Leave Schedule
+  useEffect(() => {
+    if (!selectedChamber?.id || !appointmentDate) {
+      setAvailableSlots([]);
+      setSelectedSlot(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchChamberSlots = async () => {
+      setSlotsLoading(true);
+      try {
+        const res = await api.get(`/appointments/chamber/${selectedChamber.id}/slots?date=${appointmentDate}`);
+        if (isMounted && res.data.success) {
+          setIsDoctorOnLeave(Boolean(res.data.isDoctorOnLeave));
+          setDoctorLeaveReason(res.data.leaveReason || null);
+          const slots = res.data.slots || [];
+          setAvailableSlots(slots);
+          const firstOpen = slots.find((s: any) => !s.isFull && !res.data.isDoctorOnLeave);
+          setSelectedSlot(firstOpen || null);
+        }
+      } catch (err: any) {
+        console.error('Error fetching chamber slots:', err);
+      } finally {
+        if (isMounted) setSlotsLoading(false);
+      }
+    };
+
+    fetchChamberSlots();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedChamber?.id, appointmentDate]);
+
   // Handle AI Symptom Search Triage
   const handleAiSymptomSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +192,10 @@ export default function HomePage() {
   const openBookingModal = (doctor: any) => {
     setSelectedDoctor(doctor);
     setSelectedChamber(doctor.chambers?.[0] || null);
+    setSelectedSlot(null);
+    setAvailableSlots([]);
+    setIsDoctorOnLeave(false);
+    setDoctorLeaveReason(null);
     setBookingSuccess(null);
     setOtpSent(false);
     setOtpCode('');
@@ -201,6 +247,14 @@ export default function HomePage() {
   // Confirm Booking
   const handleConfirmBooking = async () => {
     if (!selectedDoctor || !selectedChamber) return;
+    if (!selectedSlot) {
+      toast.warning('Please select an available appointment time slot.');
+      return;
+    }
+    if (selectedSlot.isFull || isDoctorOnLeave) {
+      toast.error('The selected slot is unavailable or fully booked. Please select another slot.');
+      return;
+    }
     if (!patientName || !patientPhone) {
       toast.warning('Please provide patient name and phone number.');
       return;
@@ -216,6 +270,7 @@ export default function HomePage() {
         doctorId: selectedDoctor.id,
         chamberId: selectedChamber.id,
         appointmentDate,
+        timeSlot: selectedSlot.slotTitle,
         patientName,
         patientPhone,
         problemDescription,
@@ -727,6 +782,12 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-slate-500">Time Slot:</span>
+                    <strong className="text-slate-800">
+                      {bookingSuccess.timeSlot || selectedSlot?.slotTitle}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-slate-500">Chamber:</span>
                     <span className="font-semibold text-slate-800">
                       {bookingSuccess.chamber?.name}
@@ -792,6 +853,115 @@ export default function HomePage() {
                     onChange={(e) => setAppointmentDate(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white"
                   />
+                </div>
+
+                {/* Time Slot Picker Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-brand-600" />
+                      <span>Select Appointment Time Slot</span>
+                    </label>
+                    {availableSlots.length > 0 && !isDoctorOnLeave && (
+                      <span className="text-[10px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
+                        {availableSlots.filter((s: any) => !s.isFull).length} of {availableSlots.length} shifts open
+                      </span>
+                    )}
+                  </div>
+
+                  {isDoctorOnLeave && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <div>
+                        <strong className="block font-bold">Doctor is on scheduled leave on this date:</strong>
+                        <span>{doctorLeaveReason || 'Consultation hours are closed. Please select another date.'}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {slotsLoading ? (
+                    <div className="py-4 px-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500 animate-pulse flex items-center justify-center gap-2">
+                      <div className="w-3.5 h-3.5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                      <span>Checking slot capacities & doctor schedule...</span>
+                    </div>
+                  ) : availableSlots.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {availableSlots.map((slot: any) => {
+                        const isSelected = selectedSlot?.id === slot.id;
+                        const isUnavailable = slot.isFull || isDoctorOnLeave;
+
+                        return (
+                          <button
+                            type="button"
+                            key={slot.id}
+                            disabled={isUnavailable}
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`p-2.5 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                              isSelected
+                                ? 'border-brand-600 bg-brand-50/70 shadow-sm ring-2 ring-brand-600'
+                                : isUnavailable
+                                ? 'border-slate-200 bg-slate-50/80 opacity-60 cursor-not-allowed'
+                                : 'border-slate-200 bg-white hover:border-brand-400 hover:bg-brand-50/20'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                <Clock className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                                <span className="line-clamp-1">{slot.slotTitle}</span>
+                              </div>
+
+                              {isUnavailable ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 shrink-0 flex items-center gap-0.5">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>FULL</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                                  {slot.availableCount} LEFT
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-2 flex items-center justify-between text-[10.5px]">
+                              <div className="flex items-center gap-1 text-slate-500 font-medium">
+                                <Users className="w-3 h-3 text-slate-400" />
+                                <span>
+                                  Limit: {slot.bookedCount} / {slot.maxCapacity} booked
+                                </span>
+                              </div>
+
+                              {isSelected && !isUnavailable && (
+                                <span className="text-brand-700 font-bold text-[10px] flex items-center gap-0.5">
+                                  <CheckCircle2 className="w-3 h-3 text-brand-600" />
+                                  <span>Selected</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Micro Progress Bar */}
+                            <div className="w-full bg-slate-100 h-1 rounded-full mt-1.5 overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  isUnavailable
+                                    ? 'bg-rose-500'
+                                    : slot.bookedCount / slot.maxCapacity > 0.7
+                                    ? 'bg-amber-500'
+                                    : 'bg-emerald-500'
+                                }`}
+                                style={{
+                                  width: `${Math.min(100, (slot.bookedCount / slot.maxCapacity) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-center text-xs text-amber-800">
+                      No chamber consultation slots scheduled for this day. Please choose another date.
+                    </div>
+                  )}
                 </div>
 
                 {/* Patient Information */}
@@ -896,7 +1066,7 @@ export default function HomePage() {
                 <div className="pt-2">
                   <button
                     onClick={handleConfirmBooking}
-                    disabled={bookingLoading || (!user && !otpVerified)}
+                    disabled={bookingLoading || !selectedSlot || selectedSlot.isFull || isDoctorOnLeave || (!user && !otpVerified)}
                     className="w-full py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2"
                   >
                     {bookingLoading ? (

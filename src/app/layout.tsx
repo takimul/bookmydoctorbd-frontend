@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+// @ts-ignore Next.js handles global CSS imports during compilation.
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';

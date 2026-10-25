@@ -64,6 +64,36 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
   const [patientGender, setPatientGender] = useState('Male');
   const [problemDescription, setProblemDescription] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [walkInSlots, setWalkInSlots] = useState<any[]>([]);
+  const [walkInSlotsLoading, setWalkInSlotsLoading] = useState(false);
+
+  // Dynamically load slot capacities when chamber or date changes for walk-in modal
+  useEffect(() => {
+    if (!bookChamberId || !bookDate) return;
+    let isMounted = true;
+    const fetchWalkInSlots = async () => {
+      setWalkInSlotsLoading(true);
+      try {
+        const res = await api.get(`/appointments/chamber/${bookChamberId}/slots?date=${bookDate}`);
+        if (isMounted && res.data.success) {
+          const slots = res.data.slots || [];
+          setWalkInSlots(slots);
+          if (slots.length > 0 && !slots.some((s: any) => s.slotTitle === bookTimeSlot)) {
+            const firstAvailable = slots.find((s: any) => !s.isFull) || slots[0];
+            setBookTimeSlot(firstAvailable.slotTitle);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load slots for walk-in modal:', err);
+      } finally {
+        if (isMounted) setWalkInSlotsLoading(false);
+      }
+    };
+    fetchWalkInSlots();
+    return () => {
+      isMounted = false;
+    };
+  }, [bookChamberId, bookDate]);
 
   // Load Doctor's Chambers & Schedules
   const loadChambers = async () => {
@@ -639,13 +669,32 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Time Slot Label</label>
-                  <input
-                    type="text"
-                    value={bookTimeSlot}
-                    onChange={(e) => setBookTimeSlot(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium"
-                  />
+                  <label className="block font-semibold text-slate-700 mb-1">Time Slot (With Capacity Limits) *</label>
+                  {walkInSlotsLoading ? (
+                    <div className="py-2.5 px-3 border border-slate-200 rounded-xl bg-slate-50 text-slate-400 text-xs animate-pulse">
+                      Checking slot capacities...
+                    </div>
+                  ) : walkInSlots.length > 0 ? (
+                    <select
+                      value={bookTimeSlot}
+                      onChange={(e) => setBookTimeSlot(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium bg-white text-xs"
+                    >
+                      {walkInSlots.map((slot: any) => (
+                        <option key={slot.id} value={slot.slotTitle}>
+                          {slot.slotTitle} — {slot.availableCount} of {slot.maxCapacity} slots left {slot.isFull ? '(FULL)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. 9:00 PM - 10:00 PM"
+                      value={bookTimeSlot}
+                      onChange={(e) => setBookTimeSlot(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl font-medium text-xs"
+                    />
+                  )}
                 </div>
               </div>
 
