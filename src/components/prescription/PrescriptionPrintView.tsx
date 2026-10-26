@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Printer,
   X,
   Stethoscope,
-  CheckCircle2,
   ShieldCheck,
   HeartPulse,
   FileDown,
@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { DoctorProfile, Chamber } from '@/types/doctor';
-import { Prescription } from '@/types/prescription';
 
 export interface PrescriptionPrintViewProps {
   doctor: Partial<DoctorProfile> & { name?: string; user?: { name: string; phone?: string } };
@@ -69,6 +68,19 @@ export default function PrescriptionPrintView({
 }: PrescriptionPrintViewProps) {
   const toast = useToast();
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const currentDate = rxData.date
     ? new Date(rxData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -106,121 +118,19 @@ export default function PrescriptionPrintView({
       toast.success('Prescription PDF downloaded successfully!');
     } catch (err: any) {
       console.error('Direct PDF generation error:', err);
-      toast.error('Could not generate direct PDF. Opening print dialog...');
-      handlePrint();
+      toast.error('Direct PDF download failed. Opening browser print...');
+      window.print();
     } finally {
       setDownloadingPdf(false);
     }
   };
 
-  // 2. Isolated Iframe Print (guarantees print preview displays ONLY the prescription sheet)
+  // 2. Direct Window Print (Bulletproof because component is portalled directly to document.body)
   const handlePrint = () => {
-    const printContent = document.getElementById('bmd-prescription-sheet');
-    if (!printContent) {
-      window.print();
-      return;
-    }
-
-    try {
-      // Remove any prior print frame
-      const existingIframe = document.getElementById('bmd-isolated-print-frame');
-      if (existingIframe) {
-        existingIframe.remove();
-      }
-
-      // Create hidden iframe
-      const iframe = document.createElement('iframe');
-      iframe.id = 'bmd-isolated-print-frame';
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      iframe.style.visibility = 'hidden';
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentWindow?.document;
-      if (!doc) {
-        window.print();
-        return;
-      }
-
-      // Extract all current stylesheets and inline styles from the parent application
-      let styles = '';
-      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
-        styles += node.outerHTML;
-      });
-
-      doc.open();
-      doc.write(`
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8" />
-            <title>Prescription_${(patient.name || 'Patient').replace(/\\s+/g, '_')}_${rxData.prescriptionNumber || rxData.caseNumber || 'BMD-RX'}</title>
-            ${styles}
-            <style>
-              @page {
-                size: A4 portrait;
-                margin: 4mm 6mm;
-              }
-              html, body {
-                margin: 0 !important;
-                padding: 0 !important;
-                background: #ffffff !important;
-                width: 100% !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              #bmd-prescription-sheet {
-                width: 100% !important;
-                max-width: 198mm !important;
-                min-height: 284mm !important;
-                max-height: 284mm !important;
-                margin: 0 auto !important;
-                padding: 4mm 6mm !important;
-                border: none !important;
-                box-shadow: none !important;
-                overflow: hidden !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: space-between !important;
-                background: #ffffff !important;
-              }
-            </style>
-          </head>
-          <body style="margin: 0; padding: 0; background: #ffffff;">
-            ${printContent.outerHTML}
-          </body>
-        </html>
-      `);
-      doc.close();
-
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (e) {
-          console.error('Iframe print failed, falling back:', e);
-          window.print();
-        } finally {
-          setTimeout(() => {
-            iframe.remove();
-          }, 3500);
-        }
-      }, 400);
-    } catch (err) {
-      console.error('Print handler fallback triggered:', err);
-      window.print();
-    }
+    window.print();
   };
 
-  return (
+  const modalContent = (
     <>
       {/* Strict Single-Page A4 Print Stylesheet */}
       <style
@@ -228,56 +138,62 @@ export default function PrescriptionPrintView({
           __html: `
             @page {
               size: A4 portrait;
-              margin: 4mm 6mm;
+              margin: 0;
             }
             @media print {
               html, body {
                 width: 210mm !important;
-                height: 297mm !important;
+                height: auto !important;
+                min-height: 297mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
-              /* Hide all other application components and dialogs */
+              /* Hide all other direct children of body */
               body > *:not(#bmd-prescription-modal-root) {
                 display: none !important;
                 visibility: hidden !important;
               }
-              .no-print, header, nav, footer {
-                display: none !important;
-              }
               #bmd-prescription-modal-root {
                 display: block !important;
-                position: fixed !important;
-                left: 0 !important;
-                top: 0 !important;
+                position: static !important;
                 width: 210mm !important;
-                height: 297mm !important;
+                min-height: 297mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
+                overflow: visible !important;
                 z-index: 9999999 !important;
               }
+              #bmd-prescription-modal-root > div {
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                width: 210mm !important;
+                max-width: 210mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+              }
+              .no-print {
+                display: none !important;
+              }
               #bmd-prescription-sheet {
-                width: 100% !important;
-                max-width: 198mm !important;
-                height: 287mm !important;
-                max-height: 287mm !important;
+                width: 210mm !important;
+                max-width: 210mm !important;
+                min-height: 295mm !important;
+                box-sizing: border-box !important;
                 margin: 0 auto !important;
-                padding: 4mm 6mm !important;
+                padding: 8mm 10mm !important;
                 border: none !important;
                 box-shadow: none !important;
-                overflow: hidden !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
+                background: #ffffff !important;
                 page-break-after: avoid !important;
                 break-after: avoid !important;
-                background: #ffffff !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: space-between !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
               .print-avoid-break {
                 page-break-inside: avoid !important;
@@ -288,13 +204,20 @@ export default function PrescriptionPrintView({
         }}
       />
 
-      {/* Screen Backdrop Overlay */}
+      {/* Screen Backdrop Overlay with click-outside-to-close */}
       <div
         id="bmd-prescription-modal-root"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) {
+            onClose();
+          }
+        }}
         className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static print:h-auto"
       >
-        <div className="relative bg-white w-full max-w-4xl shadow-2xl rounded-2xl print:shadow-none print:rounded-none flex flex-col my-auto border border-slate-200 print:border-none print:w-full print:max-w-none">
-          
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative bg-white w-full max-w-4xl shadow-2xl rounded-2xl print:shadow-none print:rounded-none flex flex-col my-auto border border-slate-200 print:border-none print:w-full print:max-w-none"
+        >
           {/* Action Bar (Hidden in Print) */}
           <div className="no-print flex items-center justify-between p-4 bg-slate-900 text-white rounded-t-2xl border-b border-slate-800">
             <div className="flex items-center gap-2">
@@ -342,7 +265,7 @@ export default function PrescriptionPrintView({
                   type="button"
                   onClick={onClose}
                   className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-                  title="Close preview"
+                  title="Close preview (Esc or click outside)"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -490,10 +413,8 @@ export default function PrescriptionPrintView({
 
               {/* Two-Column Medical Body (Left: Clinical Notes | Right: Rx Medications) */}
               <div className="grid grid-cols-12 gap-4 pt-1 print:gap-3">
-                
                 {/* Left Column (30%): C/C, O/E, Diagnosis, Lab Investigations */}
                 <div className="col-span-4 border-r border-slate-200 pr-3 space-y-3 text-[10.5px]">
-                  
                   {/* Chief Complaints */}
                   {rxData.chiefComplaints && (
                     <div>
@@ -576,7 +497,7 @@ export default function PrescriptionPrintView({
                     </span>
                   </div>
 
-                  {/* Medicine List Table / Cards */}
+                  {/* Medicine List Table */}
                   <div className="space-y-2.5">
                     {rxData.items && rxData.items.length > 0 ? (
                       rxData.items.map((item, idx) => (
@@ -660,7 +581,6 @@ export default function PrescriptionPrintView({
             {/* Bottom Footer: Doctor Signature Box, Digital Seal, and Platform Copyright */}
             <div className="pt-4 border-t border-slate-200 print-avoid-break mt-4">
               <div className="flex items-end justify-between">
-                
                 {/* Emergency note */}
                 <div className="text-[9px] text-slate-500 max-w-xs space-y-0.5">
                   <p className="font-bold text-rose-700">In case of acute emergency:</p>
@@ -684,10 +604,12 @@ export default function PrescriptionPrintView({
                 <span>Single-Page A4 Medical Document &bull; Generated {currentDate}</span>
               </div>
             </div>
-
           </div>
         </div>
       </div>
     </>
   );
+
+  if (!mounted) return null;
+  return createPortal(modalContent, document.body);
 }

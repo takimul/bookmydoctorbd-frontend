@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { Stethoscope, User, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Stethoscope, User, ShieldCheck, ArrowRight, Sparkles } from 'lucide-react';
+import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -134,15 +135,16 @@ export default function RegisterPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="font-semibold text-slate-700">Mobile Phone (BD) *</label>
+              <label className="font-semibold text-slate-700">Mobile Phone (Bangladesh) *</label>
               <input
-                type="text"
+                type="tel"
                 required
-                placeholder="+88017xxxxxxxx"
+                placeholder="+8801XXXXXXXXX"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white"
+                onChange={(e) => setPhone(sanitizeBdPhoneInput(e.target.value))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
+              <p className="text-[10px] text-slate-400">Auto-merges past guest bookings</p>
             </div>
 
             <div className="space-y-1">

@@ -59,6 +59,7 @@ export interface Appointment {
   doctor?: DoctorProfile;
   chamber?: Chamber;
   patientUser?: User;
+  medicalCase?: any | null;
   createdAt: string;
   updatedAt: string;
 }

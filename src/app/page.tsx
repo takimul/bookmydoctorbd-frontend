@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import SlotBookingCard from '@/components/appointments/SlotBookingCard';
+import { sanitizeBdPhoneInput, formatBdPhoneDisplay } from '@/lib/phoneUtils';
 import {
   Search,
   MapPin,
@@ -750,8 +751,18 @@ export default function HomePage() {
 
       {/* Booking Modal with Guest Mobile OTP Verification */}
       {selectedDoctor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative my-8">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedDoctor(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative my-8"
+          >
             <button
               onClick={() => setSelectedDoctor(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1"
@@ -980,14 +991,14 @@ export default function HomePage() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-slate-700">
-                      Mobile Number (BD)
+                      Mobile Number (BD) *
                     </label>
                     <input
-                      type="text"
-                      placeholder="+88017xxxxxxxx"
+                      type="tel"
+                      placeholder="+8801XXXXXXXXX"
                       value={patientPhone}
-                      onChange={(e) => setPatientPhone(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white"
+                      onChange={(e) => setPatientPhone(sanitizeBdPhoneInput(e.target.value))}
+                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </div>

@@ -22,6 +22,7 @@ import { DoctorProfile, Chamber } from '@/types/doctor';
 import { AppointmentSlotAvailability } from '@/types/appointment';
 import SlotBookingCard from '@/components/appointments/SlotBookingCard';
 import DoctorGallery from '@/components/doctor/DoctorGallery';
+import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 
 interface DoctorProfileViewProps {
   doctor: DoctorProfile;
@@ -279,8 +280,18 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
 
       {/* Booking Confirmation Modal */}
       {bookingModalOpen && selectedSlot && selectedChamber && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setBookingModalOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          >
             
             {/* Modal Header */}
             <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
@@ -390,14 +401,14 @@ export default function DoctorProfileView({ doctor }: DoctorProfileViewProps) {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mobile Number *
+                    Mobile Number (Bangladesh) *
                   </label>
                   <input
                     type="tel"
                     required
-                    placeholder="e.g. 01711223344"
+                    placeholder="+8801XXXXXXXXX"
                     value={patientPhone}
-                    onChange={(e) => setPatientPhone(e.target.value)}
+                    onChange={(e) => setPatientPhone(sanitizeBdPhoneInput(e.target.value))}
                     className="w-full text-xs font-mono px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>

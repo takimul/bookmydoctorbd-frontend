@@ -723,8 +723,18 @@ export default function DoctorPortalPage() {
       {/* MODAL: Full Consultation Studio (with AI Quick Diagnose & Bangladesh Formulary) */}
       {/* ============================================================== */}
       {activeConsultationAppt && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-3 sm:p-6">
-          <div className="bg-white rounded-3xl max-w-5xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative my-auto max-h-[92vh] overflow-y-auto space-y-6">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setActiveConsultationAppt(null);
+            }
+          }}
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-3 sm:p-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-5xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative my-auto max-h-[92vh] overflow-y-auto space-y-6"
+          >
             
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-200 pb-4">
@@ -1273,8 +1283,18 @@ export default function DoctorPortalPage() {
       {/* MODAL 4: Digital Follow-up Advice Reply */}
       {/* ============================================================== */}
       {selectedCaseForReview && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-3 sm:p-6">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs my-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedCaseForReview(null);
+            }
+          }}
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-3 sm:p-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs my-auto"
+          >
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900">

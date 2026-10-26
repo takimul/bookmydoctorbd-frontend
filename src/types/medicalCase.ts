@@ -59,6 +59,12 @@ export interface PatientHistoryResponse {
     knownAllergies: string[];
     chronicConditions: string[];
     bloodGroup: string;
+    gender?: string | null;
+    dateOfBirth?: string | null;
+    address?: string | null;
+    emergencyContact?: string | null;
+    familyMembers?: any[];
+    pets?: any[];
     pastDiagnoses: string[];
     frequentlyPrescribedMedicines: any[];
     clinicalAlerts: string[];

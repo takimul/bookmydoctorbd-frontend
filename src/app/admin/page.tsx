@@ -21,6 +21,7 @@ import {
   TrendingUp,
   FileText,
 } from 'lucide-react';
+import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 
 export default function SuperAdminPage() {
   const { user } = useAuth();
@@ -446,8 +447,18 @@ export default function SuperAdminPage() {
 
       {/* MODAL 1: Create Doctor Account Manually */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative my-8">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative my-8"
+          >
             <button
               onClick={() => setShowCreateModal(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold p-1"
@@ -521,14 +532,16 @@ export default function SuperAdminPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-700">Mobile Phone *</label>
+                    <label className="font-semibold text-slate-700">Mobile Phone (Bangladesh) *</label>
                     <input
-                      type="text"
+                      type="tel"
                       required
-                      placeholder="+88017xxxxxxxx"
+                      placeholder="+8801XXXXXXXXX"
                       value={createForm.phone}
-                      onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                      onChange={(e) =>
+                        setCreateForm({ ...createForm, phone: sanitizeBdPhoneInput(e.target.value) })
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-mono"
                     />
                   </div>
 
@@ -658,8 +671,18 @@ export default function SuperAdminPage() {
 
       {/* MODAL 2: Subscription Plan Assignment */}
       {selectedDocForSub && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 text-xs">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedDocForSub(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 text-xs"
+          >
             <button
               onClick={() => setSelectedDocForSub(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold"

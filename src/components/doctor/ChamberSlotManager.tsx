@@ -18,6 +18,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { Chamber, ChamberSchedule } from '@/types/doctor';
+import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 
 interface ChamberSlotManagerProps {
   onQueueUpdated?: () => void;
@@ -514,8 +515,18 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
 
       {/* Modal: Add Chamber */}
       {showAddChamberModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddChamberModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+          >
             <h3 className="font-extrabold text-base text-slate-900">Register New Chamber</h3>
             
             <form onSubmit={handleCreateChamber} className="space-y-3 text-xs">
@@ -630,8 +641,18 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
 
       {/* Modal: Direct Walk-in / Phone-in Appointment Booking */}
       {showWalkInModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowWalkInModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+          >
             <div>
               <h3 className="font-extrabold text-base text-slate-900">
                 Book Walk-in / Chamber Patient
@@ -711,14 +732,14 @@ export default function ChamberSlotManager({ onQueueUpdated }: ChamberSlotManage
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
+                <label className="block font-semibold text-slate-700 mb-1">Mobile Number (Bangladesh) *</label>
                 <input
                   type="tel"
                   required
-                  placeholder="e.g. 01811223344"
+                  placeholder="+8801XXXXXXXXX"
                   value={patientPhone}
-                  onChange={(e) => setPatientPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
+                  onChange={(e) => setPatientPhone(sanitizeBdPhoneInput(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-xs"
                 />
               </div>
 

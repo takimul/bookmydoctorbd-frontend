@@ -18,8 +18,16 @@ import {
   Plus,
   RefreshCw,
   Printer,
+  User,
+  MapPin,
+  ShieldAlert,
+  Heart,
+  AlertTriangle,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import PrescriptionPrintView from '@/components/PrescriptionPrintView';
+import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 
 export default function PatientPortalPage() {
   const { user } = useAuth();
@@ -27,7 +35,23 @@ export default function PatientPortalPage() {
 
   const [dashboardData, setDashboardData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'family' | 'pets'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'profile' | 'family' | 'pets'>('timeline');
+
+  // Patient Profile & Emergency Contact Form State
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    dateOfBirth: '',
+    gender: 'Male',
+    bloodGroup: 'B+',
+    allergies: '',
+    chronicConditions: '',
+    emergencyContactName: '',
+    emergencyContactRelation: 'Spouse',
+    emergencyContactPhone: '+8801',
+    address: '',
+    consentHealthRecommendations: true,
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Digital Follow-up / Report Upload Modal
   const [selectedCaseForFollowUp, setSelectedCaseForFollowUp] = useState<any | null>(null);
@@ -69,11 +93,56 @@ export default function PatientPortalPage() {
       const res = await api.get('/patient/dashboard');
       if (res.data.success) {
         setDashboardData(res.data);
+        if (res.data.patientProfile) {
+          const p = res.data.patientProfile;
+          setProfileForm({
+            name: user?.name || '',
+            dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
+            gender: p.gender || 'Male',
+            bloodGroup: p.bloodGroup || 'B+',
+            allergies: Array.isArray(p.allergies) ? p.allergies.join(', ') : '',
+            chronicConditions: Array.isArray(p.chronicConditions) ? p.chronicConditions.join(', ') : '',
+            emergencyContactName: p.emergencyContact?.split('(')?.[0]?.trim() || '',
+            emergencyContactRelation: p.emergencyContact?.split('(')?.[1]?.split(')')?.[0]?.trim() || 'Spouse',
+            emergencyContactPhone: p.emergencyContact?.split('-')?.[1]?.trim() || '+8801',
+            address: p.address || '',
+            consentHealthRecommendations: p.consentHealthRecommendations ?? true,
+          });
+        }
       }
     } catch (err: any) {
       console.error('Failed to load patient dashboard:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const res = await api.patch('/patient/profile', {
+        name: profileForm.name,
+        dateOfBirth: profileForm.dateOfBirth || null,
+        gender: profileForm.gender,
+        bloodGroup: profileForm.bloodGroup,
+        allergies: profileForm.allergies.split(',').map((a) => a.trim()).filter(Boolean),
+        chronicConditions: profileForm.chronicConditions.split(',').map((c) => c.trim()).filter(Boolean),
+        emergencyContactName: profileForm.emergencyContactName,
+        emergencyContactRelation: profileForm.emergencyContactRelation,
+        emergencyContactPhone: profileForm.emergencyContactPhone,
+        address: profileForm.address,
+        consentHealthRecommendations: profileForm.consentHealthRecommendations,
+      });
+
+      if (res.data.success) {
+        toast.success('Health profile and emergency contact updated successfully!');
+        fetchDashboard();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update profile.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -185,6 +254,14 @@ export default function PatientPortalPage() {
             }`}
           >
             Health Timeline & Cases
+          </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-4 py-2 rounded-xl transition ${
+              activeTab === 'profile' ? 'bg-white text-slate-950 font-bold shadow' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            My Health Profile &amp; Emergency
           </button>
           <button
             onClick={() => setActiveTab('family')}
@@ -444,6 +521,293 @@ export default function PatientPortalPage() {
         </div>
       )}
 
+      {/* TAB: My Health Profile & Emergency Contacts */}
+      {activeTab === 'profile' && (
+        <form onSubmit={handleSaveProfile} className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">My Health Profile &amp; Emergency Contacts</h2>
+              <p className="text-xs text-slate-500">
+                Keep your personal demographics, emergency contact, drug allergies, and chronic conditions up to date. Attending doctors review these during your chamber visits.
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              {savingProfile ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Save Health Profile</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card 1: Personal Demographics */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <User className="w-4 h-4 text-brand-600" />
+                <h3 className="font-extrabold text-slate-900 text-sm">Personal Demographics</h3>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Full Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Verified Mobile (Bangladesh)</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={user?.phone || 'N/A'}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-mono text-slate-600 cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Blood Group</label>
+                    <select
+                      value={profileForm.bloodGroup}
+                      onChange={(e) => setProfileForm({ ...profileForm, bloodGroup: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-rose-700 bg-white"
+                    >
+                      <option value="A+">A+ (A Positive)</option>
+                      <option value="A-">A- (A Negative)</option>
+                      <option value="B+">B+ (B Positive)</option>
+                      <option value="B-">B- (B Negative)</option>
+                      <option value="AB+">AB+ (AB Positive)</option>
+                      <option value="AB-">AB- (AB Negative)</option>
+                      <option value="O+">O+ (O Positive)</option>
+                      <option value="O-">O- (O Negative)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={profileForm.dateOfBirth}
+                      onChange={(e) => setProfileForm({ ...profileForm, dateOfBirth: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Gender</label>
+                    <select
+                      value={profileForm.gender}
+                      onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Residential Address</label>
+                  <textarea
+                    rows={2}
+                    placeholder="House, Road, Area, Thana, District"
+                    value={profileForm.address}
+                    onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Emergency Contact Details */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                <h3 className="font-extrabold text-slate-900 text-sm">Emergency Contact Information</h3>
+              </div>
+              <p className="text-slate-500 text-xs">
+                In case of acute clinical emergencies during chamber consultations, hospital or clinic staff will contact this individual.
+              </p>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Contact Person Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Farhana Begum"
+                    value={profileForm.emergencyContactName}
+                    onChange={(e) => setProfileForm({ ...profileForm, emergencyContactName: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Relationship</label>
+                    <select
+                      value={profileForm.emergencyContactRelation}
+                      onChange={(e) => setProfileForm({ ...profileForm, emergencyContactRelation: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium"
+                    >
+                      <option value="Spouse">Spouse (Wife/Husband)</option>
+                      <option value="Father">Father</option>
+                      <option value="Mother">Mother</option>
+                      <option value="Brother">Brother</option>
+                      <option value="Sister">Sister</option>
+                      <option value="Child">Child (Son/Daughter)</option>
+                      <option value="Guardian">Guardian</option>
+                      <option value="Friend">Friend / Colleague</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Emergency Mobile (BD) *</label>
+                    <input
+                      type="tel"
+                      placeholder="+8801XXXXXXXXX"
+                      value={profileForm.emergencyContactPhone}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          emergencyContactPhone: sanitizeBdPhoneInput(e.target.value),
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 p-3 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-900 space-y-1">
+                  <span className="font-bold flex items-center gap-1 text-[11px]">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Emergency Hotlines Displayed to Doctors:</span>
+                  </span>
+                  <p className="text-[10px] text-amber-800">
+                    National Emergency Service (999) and National Health Hotline (16263) are always accessible.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Clinical Alerts (Allergies & Chronic Diseases) */}
+            <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <h3 className="font-extrabold text-slate-900 text-sm">
+                  Clinical Contraindications: Known Allergies &amp; Chronic Diseases
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                {/* Allergies */}
+                <div className="space-y-2">
+                  <label className="font-semibold text-slate-700 block">
+                    Drug &amp; Food Allergies (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Penicillin, Sulfa drugs, Aspirin, Seafood"
+                    value={profileForm.allergies}
+                    onChange={(e) => setProfileForm({ ...profileForm, allergies: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                  />
+                  <div className="flex flex-wrap items-center gap-1 pt-1">
+                    <span className="text-[10px] text-slate-400">Quick Add:</span>
+                    {['Penicillin', 'Sulfa drugs', 'Aspirin', 'Seafood', 'Peanuts'].map((tag) => (
+                      <button
+                        type="button"
+                        key={tag}
+                        onClick={() => {
+                          const current = profileForm.allergies ? profileForm.allergies.split(',').map((s) => s.trim()) : [];
+                          if (!current.includes(tag)) {
+                            setProfileForm({
+                              ...profileForm,
+                              allergies: current.length > 0 ? `${profileForm.allergies}, ${tag}` : tag,
+                            });
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-semibold border border-rose-200 transition"
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chronic Conditions */}
+                <div className="space-y-2">
+                  <label className="font-semibold text-slate-700 block">
+                    Chronic Medical Conditions (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hypertension, Type 2 Diabetes, Asthma"
+                    value={profileForm.chronicConditions}
+                    onChange={(e) => setProfileForm({ ...profileForm, chronicConditions: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                  />
+                  <div className="flex flex-wrap items-center gap-1 pt-1">
+                    <span className="text-[10px] text-slate-400">Quick Add:</span>
+                    {['Hypertension', 'Type 2 Diabetes', 'Asthma', 'Hypothyroidism', 'CKD'].map((tag) => (
+                      <button
+                        type="button"
+                        key={tag}
+                        onClick={() => {
+                          const current = profileForm.chronicConditions ? profileForm.chronicConditions.split(',').map((s) => s.trim()) : [];
+                          if (!current.includes(tag)) {
+                            setProfileForm({
+                              ...profileForm,
+                              chronicConditions: current.length > 0 ? `${profileForm.chronicConditions}, ${tag}` : tag,
+                            });
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10px] font-semibold border border-amber-200 transition"
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Consent Toggle */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-800 block text-xs">AI Health &amp; Specialist Recommendations</span>
+                  <span className="text-[11px] text-slate-500">
+                    Allow BookMyDoctorBD AI engine to suggest relevant follow-ups and specialist visits based on your consented health records.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={profileForm.consentHealthRecommendations}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, consentHealthRecommendations: e.target.checked })
+                  }
+                  className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
+                />
+              </div>
+            </div>
+          </div>
+        </form>
+      )}
+
       {/* TAB 2: Family Profiles */}
       {activeTab === 'family' && (
         <div className="space-y-4">
@@ -555,8 +919,18 @@ export default function PatientPortalPage() {
 
       {/* MODAL: Digital Follow-up Workflow (Upload + Pay) */}
       {selectedCaseForFollowUp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-xs space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedCaseForFollowUp(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 text-xs space-y-4"
+          >
             <div className="border-b border-slate-100 pb-3 flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">
@@ -679,8 +1053,16 @@ export default function PatientPortalPage() {
 
       {/* MODAL: Add Family Member */}
       {showAddFamilyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddFamilyModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+        >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleAddFamilyMember}
             className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-xs space-y-3"
           >
@@ -763,8 +1145,16 @@ export default function PatientPortalPage() {
 
       {/* MODAL: Add Pet Profile (Cat First) */}
       {showAddPetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddPetModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+        >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleAddPet}
             className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-xs space-y-3"
           >
