@@ -107,7 +107,7 @@ export default function PrescriptionPrintView({
       const filename = `Prescription_${(patient.name || 'Patient').replace(/\s+/g, '_')}_${rxData.prescriptionNumber || rxData.caseNumber || 'BMD-RX'}.pdf`;
 
       const opt = {
-        margin: [4, 6, 4, 6],
+        margin: [6, 8, 6, 8],
         filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
@@ -125,7 +125,7 @@ export default function PrescriptionPrintView({
     }
   };
 
-  // 2. Direct Window Print (Bulletproof because component is portalled directly to document.body)
+  // 2. Direct Window Print with Bulletproof Print Styles
   const handlePrint = () => {
     window.print();
   };
@@ -138,62 +138,61 @@ export default function PrescriptionPrintView({
           __html: `
             @page {
               size: A4 portrait;
-              margin: 0;
+              margin: 6mm 8mm;
             }
             @media print {
-              html, body {
-                width: 210mm !important;
-                height: auto !important;
-                min-height: 297mm !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: #ffffff !important;
+              *, *::before, *::after {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
-              /* Hide all other direct children of body */
-              body > *:not(#bmd-prescription-modal-root) {
-                display: none !important;
-                visibility: hidden !important;
-              }
-              #bmd-prescription-modal-root {
-                display: block !important;
-                position: static !important;
-                width: 210mm !important;
-                min-height: 297mm !important;
+              html, body {
+                width: 100% !important;
+                height: auto !important;
+                min-height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
                 overflow: visible !important;
-                z-index: 9999999 !important;
               }
-              #bmd-prescription-modal-root > div {
-                box-shadow: none !important;
-                border: none !important;
-                border-radius: 0 !important;
-                width: 210mm !important;
-                max-width: 210mm !important;
-                margin: 0 !important;
+              /* Hide all normal page contents and modals */
+              body * {
+                visibility: hidden !important;
+              }
+              /* Display ONLY the prescription sheet and its child elements */
+              #bmd-prescription-sheet,
+              #bmd-prescription-sheet * {
+                visibility: visible !important;
+              }
+              #bmd-prescription-modal-root {
+                position: static !important;
+                display: block !important;
                 padding: 0 !important;
-                background: #ffffff !important;
-              }
-              .no-print {
-                display: none !important;
+                margin: 0 !important;
+                background: transparent !important;
+                overflow: visible !important;
+                height: auto !important;
+                min-height: auto !important;
               }
               #bmd-prescription-sheet {
-                width: 210mm !important;
-                max-width: 210mm !important;
-                min-height: 295mm !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                min-height: auto !important;
                 box-sizing: border-box !important;
-                margin: 0 auto !important;
-                padding: 8mm 10mm !important;
+                margin: 0 !important;
+                padding: 4mm 6mm !important;
                 border: none !important;
                 box-shadow: none !important;
                 background: #ffffff !important;
                 page-break-after: avoid !important;
                 break-after: avoid !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
+              }
+              .no-print {
+                display: none !important;
+                visibility: hidden !important;
               }
               .print-avoid-break {
                 page-break-inside: avoid !important;
