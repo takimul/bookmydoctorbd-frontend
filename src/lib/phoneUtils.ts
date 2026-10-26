@@ -99,3 +99,4 @@ export function formatBdPhoneDisplay(phone: string | null | undefined): string {
   const n = val.national;
   return `+880 ${n.slice(1, 5)}-${n.slice(5)}`;
 }
+

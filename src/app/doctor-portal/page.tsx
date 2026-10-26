@@ -37,6 +37,9 @@ import PatientHistoryModal from '@/components/PatientHistoryModal';
 import ReportUploadModal from '@/components/ReportUploadModal';
 import DoctorProfileEditor from '@/components/DoctorProfileEditor';
 import ChamberSlotManager from '@/components/ChamberSlotManager';
+import RoleGuard from '@/components/auth/RoleGuard';
+import BdPhoneInput from '@/components/common/BdPhoneInput';
+import { validateBdPhone } from '@/lib/phoneUtils';
 
 export default function DoctorPortalPage() {
   const { user } = useAuth();
@@ -51,7 +54,19 @@ export default function DoctorPortalPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [medicalCases, setMedicalCases] = useState<any[]>([]);
   const [subscriptionInfo, setSubscriptionInfo] = useState<any>(null);
+  const [chambers, setChambers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Walk-in Appointment Modal State
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInChamberId, setWalkInChamberId] = useState('');
+  const [walkInPatientName, setWalkInPatientName] = useState('');
+  const [walkInPatientPhone, setWalkInPatientPhone] = useState('+8801');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInGender, setWalkInGender] = useState('Male');
+  const [walkInComplaint, setWalkInComplaint] = useState('');
+  const [walkInImmediateStudio, setWalkInImmediateStudio] = useState(true);
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
 
   // Modal Triggers
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -106,19 +121,85 @@ export default function DoctorPortalPage() {
   const fetchDoctorPortalData = async () => {
     setLoading(true);
     try {
-      const [apptsRes, casesRes, subRes] = await Promise.all([
+      const [apptsRes, casesRes, subRes, profileRes] = await Promise.all([
         api.get('/appointments/doctor'),
         api.get('/medical-cases'),
         api.get('/subscriptions/my-status'),
+        api.get('/doctors/me/profile').catch(() => ({ data: { doctor: null } })),
       ]);
 
       if (apptsRes.data.success) setAppointments(apptsRes.data.appointments || []);
       if (casesRes.data.success) setMedicalCases(casesRes.data.cases || []);
       if (subRes.data.success) setSubscriptionInfo(subRes.data);
+      if (profileRes?.data?.doctor?.chambers) {
+        setChambers(profileRes.data.doctor.chambers);
+        if (!walkInChamberId && profileRes.data.doctor.chambers.length > 0) {
+          setWalkInChamberId(profileRes.data.doctor.chambers[0].id);
+        }
+      }
     } catch (err: any) {
       console.error('Failed to load doctor portal data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Register Walk-In Patient Directly (Immediately in system)
+  const handleCreateWalkIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walkInPatientName.trim()) {
+      toast.error('Patient full name is required.');
+      return;
+    }
+
+    const phoneValidation = validateBdPhone(walkInPatientPhone);
+    if (!phoneValidation.isValid) {
+      toast.error(phoneValidation.message || 'Please provide a valid Bangladeshi mobile number.');
+      return;
+    }
+
+    const chamberId = walkInChamberId || chambers[0]?.id;
+    if (!chamberId) {
+      toast.error('Please configure at least one chamber before booking walk-in patients.');
+      return;
+    }
+
+    setWalkInSubmitting(true);
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const res = await api.post('/appointments/doctor-book', {
+        chamberId,
+        appointmentDate: todayIso,
+        patientName: walkInPatientName.trim(),
+        patientPhone: walkInPatientPhone.trim(),
+        age: walkInAge.trim() || undefined,
+        gender: walkInGender,
+        problemDescription: walkInComplaint.trim() || undefined,
+        status: walkInImmediateStudio ? 'CHECKED_IN' : 'CONFIRMED',
+      });
+
+      if (res.data.success) {
+        toast.success(`Walk-in patient ${walkInPatientName} successfully registered!`);
+        setShowWalkInModal(false);
+
+        // Reset form
+        setWalkInPatientName('');
+        setWalkInPatientPhone('+8801');
+        setWalkInAge('');
+        setWalkInComplaint('');
+
+        // Refresh Queue
+        await fetchDoctorPortalData();
+
+        // If doctor wants to open consultation studio right away
+        if (walkInImmediateStudio && res.data.appointment) {
+          handleOpenConsultationStudio(res.data.appointment);
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to register walk-in patient.');
+    } finally {
+      setWalkInSubmitting(false);
     }
   };
 
@@ -333,7 +414,12 @@ export default function DoctorPortalPage() {
   };
 
   return (
-    <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${showPrintModal ? 'print:hidden' : ''}`}>
+    <RoleGuard
+      allowedRoles={['DOCTOR', 'SUPER_ADMIN']}
+      fallbackTitle="Doctor Clinical Portal Access"
+      fallbackMessage="This portal is strictly reserved for BMDC-registered medical practitioners. Please sign in with your doctor credentials."
+    >
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${showPrintModal ? 'print:hidden' : ''}`}>
       
       {/* Top Clinical OS Dashboard Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 space-y-6">
@@ -449,8 +535,17 @@ export default function DoctorPortalPage() {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={() => setShowWalkInModal(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Walk-In Patient</span>
+              </button>
+
+              <button
                 onClick={fetchDoctorPortalData}
-                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                className="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh Queue
               </button>
@@ -460,10 +555,18 @@ export default function DoctorPortalPage() {
           {appointments.length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500">
               <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-semibold">No patient appointments scheduled for your chambers.</p>
+              <p className="text-sm font-semibold">No patient appointments scheduled for your chambers today.</p>
               <p className="text-xs text-slate-400 mt-1">
-                You can book walk-in chamber patients anytime from the Chamber Slots tab.
+                Patients who arrive directly at your chamber can be added immediately into your live queue.
               </p>
+              <button
+                type="button"
+                onClick={() => setShowWalkInModal(true)}
+                className="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition inline-flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Add Walk-In Patient Now</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
@@ -1357,6 +1460,213 @@ export default function DoctorPortalPage() {
         </div>
       )}
 
+      {/* ============================================================== */}
+      {/* MODAL: Walk-In Chamber Patient Registration */}
+      {/* ============================================================== */}
+      {showWalkInModal && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowWalkInModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex justify-center p-3 sm:p-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative bg-white w-full max-w-xl shadow-2xl rounded-3xl p-6 sm:p-8 flex flex-col my-auto border border-slate-200"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold border border-emerald-100 shadow-sm">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Register Walk-In Patient
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Add direct chamber walk-in patient to your queue &amp; start consultation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWalkInModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateWalkIn} className="space-y-4">
+              {/* Chamber Selector */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Consultation Chamber *
+                </label>
+                {chambers.length > 0 ? (
+                  <select
+                    value={walkInChamberId}
+                    onChange={(e) => setWalkInChamberId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    required
+                  >
+                    {chambers.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.name} — {ch.upazilaThana ? `${ch.upazilaThana}, ` : ''}{ch.district} (Fee: ৳{ch.consultationFee})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    No active chambers found. Please create a chamber in the Chamber Slots tab first.
+                  </p>
+                )}
+              </div>
+
+              {/* Patient Name */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Patient Full Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mohammad Rahim"
+                  value={walkInPatientName}
+                  onChange={(e) => setWalkInPatientName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-medium"
+                  required
+                />
+              </div>
+
+              {/* Patient BD Mobile Number */}
+              <div>
+                <BdPhoneInput
+                  label="Patient BD Mobile Number *"
+                  value={walkInPatientPhone}
+                  onChange={setWalkInPatientPhone}
+                  required
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  If the patient registers later with this number, all past prescriptions and medical cases will merge automatically.
+                </p>
+              </div>
+
+              {/* Demographics: Age & Gender */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Age
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 34 Yrs"
+                    value={walkInAge}
+                    onChange={(e) => setWalkInAge(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Gender
+                  </label>
+                  <select
+                    value={walkInGender}
+                    onChange={(e) => setWalkInGender(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Chief Complaint / Symptoms */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Chief Complaint / Symptoms
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. High fever for 3 days, body ache, sore throat..."
+                  value={walkInComplaint}
+                  onChange={(e) => setWalkInComplaint(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-medium"
+                />
+              </div>
+
+              {/* Quick Action Preference */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="walkInAction"
+                    checked={walkInImmediateStudio}
+                    onChange={() => setWalkInImmediateStudio(true)}
+                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      Start Consultation Studio Immediately
+                    </span>
+                    <span className="text-[11px] text-slate-500 block">
+                      Directly opens Prescription Studio to diagnose, record vitals &amp; print prescription now
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 cursor-pointer pt-1 border-t border-slate-200/60">
+                  <input
+                    type="radio"
+                    name="walkInAction"
+                    checked={!walkInImmediateStudio}
+                    onChange={() => setWalkInImmediateStudio(false)}
+                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      Add to Waiting Queue Only
+                    </span>
+                    <span className="text-[11px] text-slate-500 block">
+                      Assigns serial number and adds to today&apos;s queue for later consultation
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowWalkInModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={walkInSubmitting}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center gap-2"
+                >
+                  {walkInSubmitting ? (
+                    <span>Registering Patient...</span>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Confirm Walk-In Patient</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
+    </RoleGuard>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import PrescriptionPrintView from '@/components/PrescriptionPrintView';
 import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
+import RoleGuard from '@/components/auth/RoleGuard';
 
 export default function PatientPortalPage() {
   const { user } = useAuth();
@@ -230,7 +231,12 @@ export default function PatientPortalPage() {
   };
 
   return (
-    <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${selectedRxForPrint ? 'print:hidden' : ''}`}>
+    <RoleGuard
+      allowedRoles={['PATIENT', 'GUEST', 'SUPER_ADMIN']}
+      fallbackTitle="Patient Portal Access"
+      fallbackMessage="Please sign in to view your verified medical cases, digital prescriptions, test reports, and family health records."
+    >
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${selectedRxForPrint ? 'print:hidden' : ''}`}>
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -1240,6 +1246,7 @@ export default function PatientPortalPage() {
         />
       )}
     </div>
+    </RoleGuard>
   );
 }
 
