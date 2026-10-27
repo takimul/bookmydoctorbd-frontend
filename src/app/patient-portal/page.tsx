@@ -25,8 +25,15 @@ import {
   AlertTriangle,
   Save,
   Loader2,
+  Camera,
+  FileImage,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import PrescriptionPrintView from '@/components/PrescriptionPrintView';
+import AppointmentReportUploadModal from '@/components/reports/AppointmentReportUploadModal';
 import { sanitizeBdPhoneInput } from '@/lib/phoneUtils';
 import RoleGuard from '@/components/auth/RoleGuard';
 
@@ -56,6 +63,12 @@ export default function PatientPortalPage() {
 
   // Digital Follow-up / Report Upload Modal
   const [selectedCaseForFollowUp, setSelectedCaseForFollowUp] = useState<any | null>(null);
+  const [selectedApptForReportUpload, setSelectedApptForReportUpload] = useState<any | null>(null);
+
+  // Cases Filtering & Pagination
+  const [caseFilterTab, setCaseFilterTab] = useState<'ALL' | 'PRESCRIPTIONS' | 'REPORTS' | 'FOLLOWUP'>('ALL');
+  const [casePage, setCasePage] = useState(1);
+  const casePageSize = 6;
   const [selectedRxForPrint, setSelectedRxForPrint] = useState<any | null>(null);
   const [uploadTestName, setUploadTestName] = useState('Lipid Profile Report');
   const [uploadFileUrl, setUploadFileUrl] = useState('https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80');
@@ -360,16 +373,28 @@ export default function PatientPortalPage() {
                       <span className="px-3 py-1 bg-brand-50 text-brand-700 font-bold text-xs rounded-full">
                         {medCase.status}
                       </span>
-                      <button
-                        onClick={() => {
-                          setSelectedCaseForFollowUp(medCase);
-                          setDigitalStep('upload');
-                        }}
-                        className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Reports & Digital Follow-up</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Direct Report Upload Modal */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApptForReportUpload(medCase.appointment || { id: medCase.id, appointmentNumber: medCase.caseNumber, patientName: user?.name, patientPhone: user?.phone })}
+                          className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs rounded-xl border border-teal-200 transition flex items-center gap-1.5"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-teal-600" />
+                          <span>+ Upload Printed Report</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedCaseForFollowUp(medCase);
+                            setDigitalStep('upload');
+                          }}
+                          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Ask Doctor Digital Follow-up</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -980,14 +1005,51 @@ export default function PatientPortalPage() {
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">Report Document URL / File</label>
-                  <input
-                    type="text"
-                    value={uploadFileUrl}
-                    onChange={(e) => setUploadFileUrl(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-[11px]"
-                  />
+                <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    Upload Printed Lab Report / Pathology Slip (Photo or PDF) *
+                  </label>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    In Bangladesh, diagnostic centers provide physical paper slips. Take a clear photo or select a scanned PDF from your phone or device:
+                  </p>
+
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-teal-300 hover:border-teal-500 rounded-xl p-4 bg-white cursor-pointer transition">
+                    <Camera className="w-6 h-6 text-teal-600 mb-1" />
+                    <span className="text-xs font-bold text-slate-800">Take Photo or Choose File</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">JPG, PNG or PDF (Max 15MB)</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (!uploadTestName) setUploadTestName(file.name.replace(/\.[^/.]+$/, ''));
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setUploadFileUrl(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  {uploadFileUrl && (
+                    <div className="flex items-center gap-2 mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-medium truncate flex-1">
+                        Report document attached successfully!
+                      </span>
+                      {uploadFileUrl.startsWith('data:image/') && (
+                        <div className="w-8 h-8 rounded border overflow-hidden shrink-0">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={uploadFileUrl} alt="Preview" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -1236,6 +1298,16 @@ export default function PatientPortalPage() {
           </form>
         </div>
       )}
+      {/* Unified Appointment Report Upload Modal for Patients */}
+      <AppointmentReportUploadModal
+        appointment={selectedApptForReportUpload}
+        isOpen={Boolean(selectedApptForReportUpload)}
+        onClose={() => setSelectedApptForReportUpload(null)}
+        onUploadSuccess={() => {
+          fetchDashboard();
+        }}
+      />
+
       {selectedRxForPrint && (
         <PrescriptionPrintView
           doctor={selectedRxForPrint.doctor}

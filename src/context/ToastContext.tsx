@@ -55,10 +55,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ toast, removeToast }}>
       {children}
-      {/* Toast Overlay Container - High Z-Index (999999) & Maximum Contrast over white and dark backgrounds */}
+      {/* Toast Overlay Container - Positioned below navbar (top-28) with high Z-Index (999999) */}
       <div
         aria-live="assertive"
-        className="fixed top-5 right-5 z-[999999] flex flex-col gap-3 max-w-md w-full pointer-events-none px-4 sm:px-0"
+        className="fixed top-28 right-5 sm:right-8 z-[999999] flex flex-col gap-3 max-w-md w-full pointer-events-none px-4 sm:px-0"
       >
         {toasts.map((t) => {
           const typeStyles = {

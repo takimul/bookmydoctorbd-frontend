@@ -125,14 +125,130 @@ export default function PrescriptionPrintView({
     }
   };
 
-  // 2. Direct Window Print with Bulletproof Print Styles
+  // 2. Direct Window Print with Isolated Iframe + Bulletproof Styles
   const handlePrint = () => {
-    window.print();
+    const element = document.getElementById('bmd-prescription-sheet');
+    if (!element) {
+      window.print();
+      return;
+    }
+
+    try {
+      // Create isolated printing iframe to prevent layout clipping and empty pages
+      const oldIframe = document.getElementById('bmd-print-iframe');
+      if (oldIframe) {
+        document.body.removeChild(oldIframe);
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'bmd-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '1000px';
+      iframe.style.height = '1400px';
+      iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      document.body.appendChild(iframe);
+
+      const pri = iframe.contentWindow;
+      if (!pri) {
+        window.print();
+        return;
+      }
+
+      // Collect all current stylesheets and fonts
+      let stylesHtml = '';
+      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+        stylesHtml += node.outerHTML;
+      });
+
+      pri.document.open();
+      pri.document.write(`
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <title>Prescription_${(patient.name || 'Patient').replace(/\\s+/g, '_')}_${rxData.prescriptionNumber || rxData.caseNumber || 'BMD-RX'}</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            ${stylesHtml}
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 6mm 8mm;
+              }
+              *, *::before, *::after {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                box-sizing: border-box !important;
+              }
+              html, body {
+                width: 100% !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #0f172a !important;
+                overflow: visible !important;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+              }
+              #bmd-prescription-sheet {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: calc(297mm - 16mm) !important;
+                margin: 0 !important;
+                padding: 4mm 6mm !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: #ffffff !important;
+              }
+              .no-print {
+                display: none !important;
+                visibility: hidden !important;
+              }
+              .print-avoid-break {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
+            </style>
+          </head>
+          <body>
+            ${element.outerHTML}
+          </body>
+        </html>
+      `);
+      pri.document.close();
+
+      setTimeout(() => {
+        try {
+          pri.focus();
+          pri.print();
+        } catch (printErr) {
+          console.error('Iframe print failed:', printErr);
+          window.print();
+        } finally {
+          setTimeout(() => {
+            const cleanup = document.getElementById('bmd-print-iframe');
+            if (cleanup && cleanup.parentNode) {
+              cleanup.parentNode.removeChild(cleanup);
+            }
+          }, 4000);
+        }
+      }, 300);
+    } catch (err) {
+      console.error('Print error:', err);
+      window.print();
+    }
   };
 
   const modalContent = (
     <>
-      {/* Strict Single-Page A4 Print Stylesheet */}
+      {/* Strict Single-Page A4 Print Stylesheet Fallback */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -144,43 +260,49 @@ export default function PrescriptionPrintView({
               *, *::before, *::after {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
               html, body {
                 width: 100% !important;
                 height: auto !important;
-                min-height: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
                 overflow: visible !important;
               }
-              /* Hide all normal page contents and modals */
-              body * {
-                visibility: hidden !important;
-              }
-              /* Display ONLY the prescription sheet and its child elements */
-              #bmd-prescription-sheet,
-              #bmd-prescription-sheet * {
-                visibility: visible !important;
+              /* Hide all background elements outside the modal */
+              body > *:not(#bmd-prescription-modal-root) {
+                display: none !important;
               }
               #bmd-prescription-modal-root {
-                position: static !important;
-                display: block !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                background: transparent !important;
-                overflow: visible !important;
-                height: auto !important;
-                min-height: auto !important;
-              }
-              #bmd-prescription-sheet {
                 position: absolute !important;
-                left: 0 !important;
                 top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                display: block !important;
+                overflow: visible !important;
+              }
+              #bmd-prescription-modal-root > div {
+                border: none !important;
+                box-shadow: none !important;
                 width: 100% !important;
                 max-width: 100% !important;
-                height: auto !important;
-                min-height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+              }
+              #bmd-prescription-sheet {
+                position: static !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: calc(297mm - 16mm) !important;
                 box-sizing: border-box !important;
                 margin: 0 !important;
                 padding: 4mm 6mm !important;

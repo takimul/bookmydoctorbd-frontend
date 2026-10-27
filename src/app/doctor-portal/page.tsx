@@ -29,10 +29,17 @@ import {
   UserPlus,
   ArrowRight,
   ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  FileImage,
+  ExternalLink,
 } from 'lucide-react';
 
 // New Sub-Components
 import PrescriptionPrintView from '@/components/PrescriptionPrintView';
+import CompletedAppointmentModal from '@/components/doctor/CompletedAppointmentModal';
+import AppointmentReportUploadModal from '@/components/reports/AppointmentReportUploadModal';
 import PatientHistoryModal from '@/components/PatientHistoryModal';
 import ReportUploadModal from '@/components/ReportUploadModal';
 import DoctorProfileEditor from '@/components/DoctorProfileEditor';
@@ -115,6 +122,46 @@ export default function DoctorPortalPage() {
 
   // Digital Follow-up review response state
   const [selectedCaseForReview, setSelectedCaseForReview] = useState<any | null>(null);
+
+  // Completed Appointment View Modal & Direct Report Upload
+  const [selectedCompletedAppt, setSelectedCompletedAppt] = useState<any | null>(null);
+  const [selectedApptForReportUpload, setSelectedApptForReportUpload] = useState<any | null>(null);
+  const [selectedRxForPrint, setSelectedRxForPrint] = useState<any | null>(null);
+
+  // Queue Filtering & Pagination
+  const [queueFilterTab, setQueueFilterTab] = useState<'ALL' | 'WAITING' | 'IN_CONSULTATION' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [queueSearch, setQueueSearch] = useState('');
+  const [queuePage, setQueuePage] = useState(1);
+  const queuePageSize = 10;
+
+  // Clinical Diagnosis Presets
+  const DIAGNOSIS_PRESETS = [
+    'Acute Viral Pharyngitis with URTI',
+    'Essential Hypertension (Grade 1/2)',
+    'Type 2 Diabetes Mellitus with Dyslipidemia',
+    'Acute Gastroenteritis & Dehydration',
+    'Bronchial Asthma with Acute Exacerbation',
+    'Gastric Acidity / GERD with Dyspepsia',
+    'Generalized Body Ache & Viral Fever',
+    'Allergic Rhinitis with Sinusitis',
+  ];
+
+  // Lab Investigation Presets
+  const INVESTIGATION_PRESETS = [
+    'Complete Blood Count (CBC) with ESR',
+    'Serum Creatinine & Electrolytes',
+    'Fasting Blood Sugar (FBS) & HbA1c',
+    'Fasting Lipid Profile',
+    'Chest X-Ray P/A View',
+    'Urine Routine Examination (R/M/E)',
+    'Ultrasonogram (USG) of Whole Abdomen',
+    'Serum SGPT (ALT) & Bilirubin',
+  ];
+
+  const DOSAGE_CHIPS = ['1+0+1', '1+1+1', '1+0+0', '0+0+1', '0+1+0', '1+1+1+1', '1 tsp 3 times'];
+  const TIMING_CHIPS = ['After meal', 'Before meal', 'With food', 'Empty stomach', 'At bedtime'];
+  const DURATION_CHIPS = [3, 5, 7, 10, 14, 30];
+  const FORM_CHIPS = ['Tablet', 'Capsule', 'Syrup', 'Suspension', 'Drops', 'Injection', 'Ointment', 'Inhaler'];
   const [followUpAdviceText, setFollowUpAdviceText] = useState('');
 
   // Load Doctor Data
@@ -413,6 +460,42 @@ export default function DoctorPortalPage() {
     }
   };
 
+    // Pending digital follow-ups needing doctor review
+  const pendingFollowUps = appointments.flatMap((a) => {
+    const followUps = a.medicalCase?.digitalFollowUps || [];
+    return followUps
+      .filter((f: any) => f.status !== 'COMPLETED' && (!f.doctorAdvice || f.status === 'PAID' || f.status === 'PENDING'))
+      .map((f: any) => ({ ...f, appointment: a, medicalCase: a.medicalCase, patientName: a.patientName, patientPhone: a.patientPhone }));
+  });
+
+  // Queue Counts
+  const waitingCount = appointments.filter((a) => ['REQUESTED', 'CONFIRMED', 'CHECKED_IN'].includes(a.status)).length;
+  const consultCount = appointments.filter((a) => ['CONSULTATION_STARTED', 'IN_PROGRESS', 'IN_CHAMBER'].includes(a.status)).length;
+  const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
+  const cancelledCount = appointments.filter((a) => ['CANCELLED', 'NO_SHOW'].includes(a.status)).length;
+
+  // Filtered Appointments
+  const filteredAppointments = appointments.filter((appt) => {
+    if (queueFilterTab === 'WAITING' && !['REQUESTED', 'CONFIRMED', 'CHECKED_IN'].includes(appt.status)) return false;
+    if (queueFilterTab === 'IN_CONSULTATION' && !['CONSULTATION_STARTED', 'IN_PROGRESS', 'IN_CHAMBER'].includes(appt.status)) return false;
+    if (queueFilterTab === 'COMPLETED' && appt.status !== 'COMPLETED') return false;
+    if (queueFilterTab === 'CANCELLED' && !['CANCELLED', 'NO_SHOW'].includes(appt.status)) return false;
+
+    if (queueSearch.trim()) {
+      const q = queueSearch.toLowerCase();
+      const matchName = appt.patientName?.toLowerCase().includes(q);
+      const matchPhone = appt.patientPhone?.toLowerCase().includes(q);
+      const matchSerial = String(appt.serialNumber || '').includes(q);
+      const matchApptNum = appt.appointmentNumber?.toLowerCase().includes(q);
+      if (!matchName && !matchPhone && !matchSerial && !matchApptNum) return false;
+    }
+
+    return true;
+  });
+
+  const totalQueuePages = Math.max(1, Math.ceil(filteredAppointments.length / queuePageSize));
+  const paginatedAppointments = filteredAppointments.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
+
   return (
     <RoleGuard
       allowedRoles={['DOCTOR', 'SUPER_ADMIN']}
@@ -421,6 +504,58 @@ export default function DoctorPortalPage() {
     >
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${showPrintModal ? 'print:hidden' : ''}`}>
       
+      {/* Pending Digital Follow-Ups High-Priority Glowing Alert */}
+      {pendingFollowUps.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-amber-300 space-y-3 animate-pulse">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center font-bold shrink-0">
+                <Sparkles className="w-5 h-5 text-yellow-200 animate-spin" />
+              </div>
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-white/20 text-white border border-white/30">
+                  Immediate Clinical Review Required
+                </span>
+                <h3 className="text-base sm:text-lg font-extrabold mt-0.5">
+                  {pendingFollowUps.length} Patient Digital Follow-Up(s) &amp; Lab Report(s) Awaiting Your Clinical Advice
+                </h3>
+                <p className="text-xs text-amber-100">
+                  Patients have submitted digital queries and uploaded printed diagnostic reports. Review and send prescription advice.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+            {pendingFollowUps.slice(0, 3).map((fu, idx) => (
+              <div key={fu.id || idx} className="bg-slate-900/70 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 text-xs space-y-2 flex flex-col justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white text-sm">{fu.patientName}</span>
+                    <span className="font-mono text-[10px] text-teal-300 font-bold">{fu.patientPhone}</span>
+                  </div>
+                  <p className="text-slate-200 italic line-clamp-2">
+                    &ldquo;{fu.patientQuery}&rdquo;
+                  </p>
+                  <div className="text-[10px] text-amber-200">
+                    Case: {fu.medicalCase?.caseNumber || 'Medical Case'} &bull; Status: {fu.status}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCaseForReview({ ...fu.medicalCase, appointment: fu.appointment, patientUser: { name: fu.patientName, phone: fu.patientPhone } })}
+                  className="w-full py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Review Reports &amp; Send Advice</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Top Clinical OS Dashboard Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 space-y-6">
         
@@ -524,12 +659,13 @@ export default function DoctorPortalPage() {
       {/* TAB 1: Chamber Queue & Live Appointments */}
       {/* ============================================================== */}
       {activeTab === 'appointments' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Header & Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Live Chamber Patient Queue</h2>
               <p className="text-xs text-slate-500">
-                Click any patient&apos;s phone to trace complete past medical history, or start consultation studio.
+                Filter patients by consultation stage, trace past history by mobile, view visit details &amp; print prescriptions.
               </p>
             </div>
 
@@ -552,6 +688,86 @@ export default function DoctorPortalPage() {
             </div>
           </div>
 
+          {/* Filtering Tabs & Search Bar */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => { setQueueFilterTab('ALL'); setQueuePage(1); }}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  queueFilterTab === 'ALL'
+                    ? 'bg-slate-900 text-white font-bold shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                All ({appointments.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setQueueFilterTab('WAITING'); setQueuePage(1); }}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  queueFilterTab === 'WAITING'
+                    ? 'bg-amber-600 text-white font-bold shadow-sm'
+                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                }`}
+              >
+                Waiting / Checked-In ({waitingCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setQueueFilterTab('IN_CONSULTATION'); setQueuePage(1); }}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  queueFilterTab === 'IN_CONSULTATION'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm'
+                    : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                }`}
+              >
+                In Consultation ({consultCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setQueueFilterTab('COMPLETED'); setQueuePage(1); }}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  queueFilterTab === 'COMPLETED'
+                    ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                }`}
+              >
+                Completed ({completedCount})
+              </button>
+
+              {cancelledCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setQueueFilterTab('CANCELLED'); setQueuePage(1); }}
+                  className={`px-3 py-1.5 rounded-xl transition ${
+                    queueFilterTab === 'CANCELLED'
+                      ? 'bg-rose-600 text-white font-bold shadow-sm'
+                      : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                  }`}
+                >
+                  Cancelled ({cancelledCount})
+                </button>
+              )}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full md:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Search patient, phone, serial..."
+                value={queueSearch}
+                onChange={(e) => { setQueueSearch(e.target.value); setQueuePage(1); }}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+              />
+            </div>
+          </div>
+
           {appointments.length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500">
               <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -570,10 +786,17 @@ export default function DoctorPortalPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {appointments.map((appt) => (
+              {paginatedAppointments.map((appt) => {
+                const isCompleted = appt.status === 'COMPLETED';
+                const rxCount = appt.medicalCase?.prescriptions?.length || 0;
+                const reportsCount = (appt.medicalCase?.patientReports?.length || 0) + (appt.reports?.length || 0);
+
+                return (
                 <div
                   key={appt.id}
-                  className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-teal-300 transition"
+                  className={`bg-white rounded-3xl border p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                    isCompleted ? 'border-emerald-200 hover:border-emerald-400 bg-emerald-50/20' : 'border-slate-200 hover:border-teal-300'
+                  }`}
                 >
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-800 font-extrabold text-base flex flex-col items-center justify-center shrink-0 border border-teal-100">
@@ -684,17 +907,117 @@ export default function DoctorPortalPage() {
                     )}
 
                     {appt.status === 'COMPLETED' && (
-                      <button
-                        onClick={() => handleOpenConsultationStudio(appt)}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Prescription Studio</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* 1. View Visit Details & What Happened */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCompletedAppt(appt)}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                          title="View what happened at this visit: diagnosis, vitals, prescriptions & tests"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Visit Details ({rxCount} Rx)</span>
+                        </button>
+
+                        {/* 2. Direct Report Upload for this Appointment */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApptForReportUpload(appt)}
+                          className="px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold flex items-center gap-1 transition border border-teal-200"
+                          title="Upload printed lab report photo or PDF for this visit"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-teal-600" />
+                          <span>+ Report</span>
+                        </button>
+
+                        {/* 3. Direct Print latest Prescription if exists */}
+                        {rxCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const latestRx = appt.medicalCase.prescriptions[0];
+                              setSelectedRxForPrint({
+                                doctor: user?.doctorProfile || { name: user?.name },
+                                chamber: appt.chamber,
+                                patient: { name: appt.patientName, phone: appt.patientPhone },
+                                rxData: {
+                                  ...latestRx,
+                                  caseNumber: appt.medicalCase?.caseNumber,
+                                  items: latestRx.items || [],
+                                  investigations: appt.medicalCase?.investigationOrders || [],
+                                },
+                              });
+                            }}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                            title="Print official single-page A4 prescription"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Print Rx</span>
+                          </button>
+                        )}
+
+                        {/* 4. Write New / Follow-up Prescription */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenConsultationStudio(appt)}
+                          className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                          title="Write new prescription for this case (preserves past history)"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>New Rx</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
-              ))}
+              );
+              })}
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {filteredAppointments.length > queuePageSize && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500 font-medium">
+                Showing {((queuePage - 1) * queuePageSize) + 1} to {Math.min(queuePage * queuePageSize, filteredAppointments.length)} of {filteredAppointments.length} appointments
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+                  disabled={queuePage === 1}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Prev</span>
+                </button>
+
+                {Array.from({ length: totalQueuePages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setQueuePage(pageNum)}
+                    className={`w-8 h-8 rounded-xl font-bold transition ${
+                      queuePage === pageNum
+                        ? 'bg-teal-600 text-white shadow-sm'
+                        : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setQueuePage((p) => Math.min(totalQueuePages, p + 1))}
+                  disabled={queuePage === totalQueuePages}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -996,7 +1319,71 @@ export default function DoctorPortalPage() {
 
             {/* Diagnosis & Examination Findings */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1">
+              {/* Previous Prescriptions on File Alert */}
+            {activeConsultationAppt?.medicalCase?.prescriptions?.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-emerald-900 block">
+                      Case History: {activeConsultationAppt.medicalCase.prescriptions.length} Prescription(s) Already on File
+                    </span>
+                    <span className="text-emerald-700 block">
+                      Saving will append this as Rx #{activeConsultationAppt.medicalCase.prescriptions.length + 1}. All previous prescriptions remain permanently preserved.
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const latestRx = activeConsultationAppt.medicalCase.prescriptions[0];
+                    setSelectedRxForPrint({
+                      doctor: user?.doctorProfile || { name: user?.name },
+                      chamber: activeConsultationAppt.chamber,
+                      patient: { name: activeConsultationAppt.patientName, phone: activeConsultationAppt.patientPhone },
+                      rxData: {
+                        ...latestRx,
+                        caseNumber: activeConsultationAppt.medicalCase.caseNumber,
+                        items: latestRx.items || [],
+                        investigations: activeConsultationAppt.medicalCase.investigationOrders || [],
+                      },
+                    });
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold shrink-0 flex items-center gap-1 shadow-sm transition"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>View Latest Rx</span>
+                </button>
+              </div>
+            )}
+
+            {/* Quick 1-Click Diagnosis Presets */}
+            <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                Quick Diagnosis Presets (1-Click):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {DIAGNOSIS_PRESETS.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setDiagnosis(p)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
+                      diagnosis === p
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                        : 'bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-900 border-slate-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
                 <label className="font-bold text-slate-800">Primary Diagnosis *</label>
                 <input
                   type="text"
@@ -1169,6 +1556,69 @@ export default function DoctorPortalPage() {
                       </div>
 
                     </div>
+
+                    {/* Quick Selection Chips (Dose, Meal, Duration) */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/60 text-[10px]">
+                      <span className="font-bold text-slate-500 uppercase mr-0.5">Dose:</span>
+                      {DOSAGE_CHIPS.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            const updated = [...prescriptionItems];
+                            updated[idx].dosageInstruction = d;
+                            setPrescriptionItems(updated);
+                          }}
+                          className={`px-1.5 py-0.5 rounded font-mono font-bold transition ${
+                            item.dosageInstruction === d
+                              ? 'bg-teal-600 text-white'
+                              : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      ))}
+
+                      <span className="font-bold text-slate-500 uppercase ml-2 mr-0.5">Meal:</span>
+                      {TIMING_CHIPS.slice(0, 3).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            const updated = [...prescriptionItems];
+                            updated[idx].timing = t;
+                            setPrescriptionItems(updated);
+                          }}
+                          className={`px-1.5 py-0.5 rounded font-medium transition ${
+                            item.timing === t
+                              ? 'bg-slate-800 text-white font-bold'
+                              : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+
+                      <span className="font-bold text-slate-500 uppercase ml-2 mr-0.5">Days:</span>
+                      {DURATION_CHIPS.map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => {
+                            const updated = [...prescriptionItems];
+                            updated[idx].durationDays = days;
+                            setPrescriptionItems(updated);
+                          }}
+                          className={`px-1.5 py-0.5 rounded font-bold transition ${
+                            Number(item.durationDays) === days
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-white hover:bg-emerald-50 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {days}d
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1176,6 +1626,33 @@ export default function DoctorPortalPage() {
 
             {/* Diagnostic Investigations */}
             <div className="space-y-3 text-xs">
+              {/* Quick Investigation Presets */}
+              <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Quick Laboratory Test Presets (1-Click to Advise):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {INVESTIGATION_PRESETS.map((t, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        if (!investigations.some((inv) => inv.testName === t)) {
+                          setInvestigations([
+                            ...investigations.filter((inv) => inv.testName.trim() !== ''),
+                            { testName: t, instructions: 'Standard laboratory fasting protocol', urgency: 'NORMAL' },
+                          ]);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 transition flex items-center gap-1 shadow-sm"
+                    >
+                      <Plus className="w-3 h-3 text-teal-600" />
+                      <span>{t}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-slate-900 text-sm">Order Lab Investigations / Diagnostic Tests</h4>
                 <button
@@ -1458,6 +1935,65 @@ export default function DoctorPortalPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 5: Completed Appointment Details & Clinical Summary */}
+      {/* ============================================================== */}
+      <CompletedAppointmentModal
+        appointment={selectedCompletedAppt}
+        isOpen={Boolean(selectedCompletedAppt)}
+        onClose={() => setSelectedCompletedAppt(null)}
+        onOpenPrescriptionStudio={(appt) => {
+          setSelectedCompletedAppt(null);
+          handleOpenConsultationStudio(appt);
+        }}
+        onOpenReportUpload={(appt) => {
+          setSelectedApptForReportUpload(appt);
+        }}
+        onOpenPatientHistory={(phone) => {
+          setSelectedCompletedAppt(null);
+          setHistoryTargetPhone(phone);
+          setShowHistoryModal(true);
+        }}
+        onViewPrescription={(prescription, appt) => {
+          setSelectedRxForPrint({
+            doctor: user?.doctorProfile || { name: user?.name },
+            chamber: appt.chamber,
+            patient: { name: appt.patientName, phone: appt.patientPhone },
+            rxData: {
+              ...prescription,
+              caseNumber: appt.medicalCase?.caseNumber,
+              items: prescription.items || [],
+              investigations: appt.medicalCase?.investigationOrders || [],
+            },
+          });
+        }}
+      />
+
+      {/* ============================================================== */}
+      {/* MODAL 6: Unified Appointment Report Upload Modal (Doctor & Patient) */}
+      {/* ============================================================== */}
+      <AppointmentReportUploadModal
+        appointment={selectedApptForReportUpload}
+        isOpen={Boolean(selectedApptForReportUpload)}
+        onClose={() => setSelectedApptForReportUpload(null)}
+        onUploadSuccess={() => {
+          fetchDoctorPortalData();
+        }}
+      />
+
+      {/* ============================================================== */}
+      {/* MODAL 7: Prescription Print & Preview View for any prescription */}
+      {/* ============================================================== */}
+      {selectedRxForPrint && (
+        <PrescriptionPrintView
+          doctor={selectedRxForPrint.doctor}
+          chamber={selectedRxForPrint.chamber}
+          patient={selectedRxForPrint.patient}
+          rxData={selectedRxForPrint.rxData}
+          onClose={() => setSelectedRxForPrint(null)}
+        />
       )}
 
       {/* ============================================================== */}

@@ -28,6 +28,12 @@ import {
   Trash2,
   Activity,
   ArrowRight,
+  Eye,
+  EyeOff,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Copy,
 } from 'lucide-react';
 import { sanitizeBdPhoneInput, formatBdPhoneDisplay } from '@/lib/phoneUtils';
 import RoleGuard from '@/components/auth/RoleGuard';
@@ -36,7 +42,31 @@ export default function SuperAdminPage() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [activeTab, setActiveTab] = useState<'doctors' | 'users' | 'appointments' | 'analytics'>('doctors');
+  const [activeTab, setActiveTab] = useState<'doctors' | 'users' | 'appointments' | 'audit-logs' | 'analytics'>('doctors');
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+  const [auditActionFilter, setAuditActionFilter] = useState('');
+  const [auditTargetFilter, setAuditTargetFilter] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
+  const [auditTotal, setAuditTotal] = useState(0);
+
+  // Password Visibility Toggle State for Super Admin Credentials Viewing
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  const togglePasswordReveal = (userId: string) => {
+    setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
+
+  // Pagination states
+  const [docPage, setDocPage] = useState(1);
+  const docPageSize = 10;
+  const [userPage, setUserPage] = useState(1);
+  const userPageSize = 10;
+  const [apptPage, setApptPage] = useState(1);
+  const apptPageSize = 10;
 
   // Overview / Analytics
   const [analytics, setAnalytics] = useState<any>(null);
@@ -144,6 +174,31 @@ export default function SuperAdminPage() {
     }
   };
 
+  // Fetch Platform Audit Logs
+  const fetchAuditLogs = async () => {
+    setAuditLogsLoading(true);
+    try {
+      const res = await api.get('/admin/audit-logs', {
+        params: {
+          page: auditPage,
+          limit: 20,
+          action: auditActionFilter || undefined,
+          targetType: auditTargetFilter || undefined,
+          search: auditSearch || undefined,
+        },
+      });
+      if (res.data.success) {
+        setAuditLogs(res.data.logs || []);
+        setAuditTotal(res.data.total || 0);
+        setAuditTotalPages(res.data.totalPages || 1);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to fetch audit logs.');
+    } finally {
+      setAuditLogsLoading(false);
+    }
+  };
+
   // 3. Fetch Platform Appointments
   const fetchAppointments = async () => {
     setAppointmentsLoading(true);
@@ -174,8 +229,10 @@ export default function SuperAdminPage() {
       fetchUsers();
     } else if (activeTab === 'appointments') {
       fetchAppointments();
+    } else if (activeTab === 'audit-logs') {
+      fetchAuditLogs();
     }
-  }, [activeTab, roleFilter, apptStatusFilter]);
+  }, [activeTab, roleFilter, apptStatusFilter, auditPage, auditActionFilter, auditTargetFilter]);
 
   // Handle Doctor Verification Status Change
   const handleUpdateStatus = async (
@@ -480,6 +537,23 @@ export default function SuperAdminPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab('audit-logs')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition ${
+              activeTab === 'audit-logs'
+                ? 'bg-slate-900 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <span>Platform Audit Logs</span>
+            {auditTotal > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-mono font-bold">
+                {auditTotal}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('analytics')}
             className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition ${
               activeTab === 'analytics'
@@ -558,7 +632,8 @@ export default function SuperAdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      {doctors.map((doc) => {
+                      {/* Paginated Doctors Slice */}
+                      {doctors.slice((docPage - 1) * docPageSize, docPage * docPageSize).map((doc) => {
                         const sub = doc.subscription;
                         const isVerified = doc.verificationStatus === 'VERIFIED';
                         const isPending = doc.verificationStatus === 'PENDING';
@@ -685,6 +760,36 @@ export default function SuperAdminPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Doctors Pagination Controls */}
+                {doctors.length > docPageSize && (
+                  <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/50">
+                    <span className="text-slate-500 font-medium">
+                      Showing {((docPage - 1) * docPageSize) + 1} to {Math.min(docPage * docPageSize, doctors.length)} of {doctors.length} doctors
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setDocPage((p) => Math.max(1, p - 1))}
+                        disabled={docPage === 1}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                      </button>
+                      <span className="px-3 py-1 font-bold text-slate-700 bg-white border border-slate-200 rounded-xl">
+                        Page {docPage} of {Math.ceil(doctors.length / docPageSize)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDocPage((p) => Math.min(Math.ceil(doctors.length / docPageSize), p + 1))}
+                        disabled={docPage >= Math.ceil(doctors.length / docPageSize)}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                      >
+                        Next <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -756,7 +861,7 @@ export default function SuperAdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      {usersList.map((u) => {
+                      {usersList.slice((userPage - 1) * userPageSize, userPage * userPageSize).map((u) => {
                         const isSelf = u.id === user?.id;
 
                         const roleBadgeColor = {
@@ -783,12 +888,43 @@ export default function SuperAdminPage() {
                               </div>
                             </td>
 
-                            <td className="py-3.5 px-4 space-y-0.5">
-                              <div className="font-mono text-slate-900 font-bold">
+                            <td className="py-3.5 px-4 space-y-1">
+                              <div className="font-mono text-slate-900 font-bold text-xs">
                                 {formatBdPhoneDisplay(u.phone)}
                               </div>
-                              <div className="text-slate-500 text-[11px]">
-                                {u.email || 'No email registered'}
+                              {u.email && (
+                                <div className="text-slate-500 text-[11px] truncate max-w-[160px]">
+                                  {u.email}
+                                </div>
+                              )}
+                              
+                              {/* Super Admin Credentials Viewer (Password Show/Hide) */}
+                              <div className="flex items-center gap-1.5 bg-slate-100/90 border border-slate-200/80 px-2 py-1 rounded-lg">
+                                <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="font-mono text-[11px] font-bold text-slate-800 tracking-wider">
+                                  {revealedPasswords[u.id] ? (u.tempPassword || 'Encr-••••••') : '••••••••'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => togglePasswordReveal(u.id)}
+                                  className="p-0.5 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-800 transition ml-auto"
+                                  title={revealedPasswords[u.id] ? "Hide password" : "View temporary/reset password"}
+                                >
+                                  {revealedPasswords[u.id] ? <EyeOff className="w-3.5 h-3.5 text-amber-600" /> : <Eye className="w-3.5 h-3.5 text-teal-600" />}
+                                </button>
+                                {u.tempPassword && revealedPasswords[u.id] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(u.tempPassword);
+                                      toast.success('Temporary password copied to clipboard!');
+                                    }}
+                                    className="p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-700"
+                                    title="Copy password"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                )}
                               </div>
                             </td>
 
@@ -865,6 +1001,36 @@ export default function SuperAdminPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Users Pagination Controls */}
+                {usersList.length > userPageSize && (
+                  <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/50">
+                    <span className="text-slate-500 font-medium">
+                      Showing {((userPage - 1) * userPageSize) + 1} to {Math.min(userPage * userPageSize, usersList.length)} of {usersList.length} users
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                        disabled={userPage === 1}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                      </button>
+                      <span className="px-3 py-1 font-bold text-slate-700 bg-white border border-slate-200 rounded-xl">
+                        Page {userPage} of {Math.ceil(usersList.length / userPageSize)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setUserPage((p) => Math.min(Math.ceil(usersList.length / userPageSize), p + 1))}
+                        disabled={userPage >= Math.ceil(usersList.length / userPageSize)}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                      >
+                        Next <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1011,6 +1177,192 @@ export default function SuperAdminPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 5: PLATFORM AUDIT LOGS (SUPER ADMIN POWER CONSOLE) */}
+        {/* ========================================================================= */}
+        {activeTab === 'audit-logs' && (
+          <div className="space-y-4">
+            {/* Header & Filter Bar */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-purple-600" />
+                  <span>Platform Administrative Audit Trail</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Comprehensive audit logging tracking all administrative events, password changes, doctor creations &amp; approvals.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fetchAuditLogs}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Refresh Logs</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Controls Bar */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search logs by actor, action, details, IP, or ID..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchAuditLogs()}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={auditActionFilter}
+                  onChange={(e) => { setAuditActionFilter(e.target.value); setAuditPage(1); }}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">All Action Types</option>
+                  <option value="DOCTOR_CREATED">DOCTOR_CREATED</option>
+                  <option value="PASSWORD_RESET">PASSWORD_RESET</option>
+                  <option value="DOCTOR_STATUS_UPDATED">DOCTOR_STATUS_UPDATED</option>
+                  <option value="ROLE_UPDATED">ROLE_UPDATED</option>
+                  <option value="APPOINTMENT_REPORT_UPLOADED">REPORT_UPLOADED</option>
+                </select>
+
+                <select
+                  value={auditTargetFilter}
+                  onChange={(e) => { setAuditTargetFilter(e.target.value); setAuditPage(1); }}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">All Targets</option>
+                  <option value="DOCTOR">DOCTOR</option>
+                  <option value="USER">USER</option>
+                  <option value="APPOINTMENT">APPOINTMENT</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Audit Logs Table */}
+            {auditLogsLoading ? (
+              <div className="p-12 text-center text-xs text-slate-400 font-semibold bg-white rounded-3xl border border-slate-200">
+                Fetching secure platform audit trail from PostgreSQL database...
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500">
+                <ShieldAlert className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold">No audit logs found matching criteria.</p>
+                <p className="text-xs text-slate-400 mt-1">Actions performed by administrators and doctors will appear here.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                      <tr>
+                        <th className="py-3 px-4">Timestamp</th>
+                        <th className="py-3 px-4">Actor (User &amp; Role)</th>
+                        <th className="py-3 px-4">Action Event</th>
+                        <th className="py-3 px-4">Target</th>
+                        <th className="py-3 px-4">Audit Details</th>
+                        <th className="py-3 px-4 text-right">IP Address</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {auditLogs.map((log) => {
+                        const actionColor = {
+                          DOCTOR_CREATED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                          PASSWORD_RESET: 'bg-amber-100 text-amber-800 border-amber-200',
+                          DOCTOR_STATUS_UPDATED: 'bg-blue-100 text-blue-800 border-blue-200',
+                          ROLE_UPDATED: 'bg-purple-100 text-purple-800 border-purple-200',
+                          APPOINTMENT_REPORT_UPLOADED: 'bg-teal-100 text-teal-800 border-teal-200',
+                        }[log.action as string] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-50/70 transition">
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              <div className="font-mono text-slate-900 font-semibold text-[11px]">
+                                {new Date(log.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </div>
+                              <div className="font-mono text-slate-400 text-[10px]">
+                                {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-slate-900">{log.actorName || 'System'}</div>
+                              <span className="inline-block px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-slate-100 text-slate-600 mt-0.5">
+                                {log.actorRole || 'SYSTEM'}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <span className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold border ${actionColor}`}>
+                                {log.action}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-800">{log.targetType || 'SYSTEM'}</span>
+                              {log.targetId && (
+                                <div className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                  ID: {log.targetId}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-slate-600 max-w-xs">
+                              <p className="line-clamp-2 text-[11px] font-medium leading-relaxed">
+                                {log.details || 'No additional details logged.'}
+                              </p>
+                            </td>
+
+                            <td className="py-3 px-4 text-right font-mono text-[11px] text-slate-400">
+                              {log.ipAddress || '127.0.0.1'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Audit Logs Pagination Controls */}
+                <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/50">
+                  <span className="text-slate-500 font-medium">
+                    Showing page {auditPage} of {auditTotalPages} ({auditTotal} total logged events)
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                      disabled={auditPage === 1}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                    </button>
+                    <span className="px-3 py-1 font-bold text-slate-700 bg-white border border-slate-200 rounded-xl">
+                      {auditPage} / {auditTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAuditPage((p) => Math.min(auditTotalPages, p + 1))}
+                      disabled={auditPage >= auditTotalPages}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 font-bold transition flex items-center gap-1"
+                    >
+                      Next <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
